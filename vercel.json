@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "name": "spravca-predplatneho",
+  "cleanUrls": true,
+  "builds": [
+    {
+      "src": "*",
+      "use": "@vercel/static"
+    }
+  ]
+}

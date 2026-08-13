@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Správca predplatných | Sledujte svoje výdavky a šetrite</title>
+    <meta name="description" content="Aplikácia na sledovanie pravidelných platieb, výpočet celkových nákladov, plánovanie úspor a notifikácie nadchádzajúcich platieb.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome 6 Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Mobile Overlay -->
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <i class="fa-solid fa-wallet"></i>
+                    </div>
+                    <div class="logo-text">
+                        <h2>Správca</h2>
+                        <span>predplatných</span>
+                    </div>
+                </div>
+                <button class="close-sidebar-btn" id="closeSidebarBtn" aria-label="Zatvoriť menu">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul>
+                    <li>
+                        <a href="#dashboard" class="nav-link active" data-view="dashboard">
+                            <i class="fa-solid fa-chart-pie"></i>
+                            <span>Prehľad</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#subscriptions" class="nav-link" data-view="subscriptions">
+                            <i class="fa-solid fa-list-check"></i>
+                            <span>Moje predplatné</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#add-subscription" class="nav-link" data-view="add-subscription">
+                            <i class="fa-solid fa-circle-plus"></i>
+                            <span>Pridať predplatné</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#calculator" class="nav-link" data-view="calculator">
+                            <i class="fa-solid fa-calculator"></i>
+                            <span>Kalkulačka úspor</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#notifications" class="nav-link" data-view="notifications">
+                            <i class="fa-solid fa-bell"></i>
+                            <span>Upozornenia</span>
+                            <span class="badge badge-alert hidden" id="navNotificationBadge">0</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#export" class="nav-link" data-view="export">
+                            <i class="fa-solid fa-file-export"></i>
+                            <span>Export a záloha</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="mini-summary">
+                    <span class="mini-summary-label">Mesačné výdavky</span>
+                    <strong class="mini-summary-value" id="sidebarMonthlyTotal">0,00 €</strong>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="main-wrapper">
+            <!-- Header Bar -->
+            <header class="top-header">
+                <div class="header-left">
+                    <button class="mobile-toggle-btn" id="mobileToggleBtn" aria-label="Otvoriť menu">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <h1 class="page-title" id="pageTitle">Prehľad</h1>
+                    <span class="storage-status-badge" id="storageStatusBadge">
+                        <i class="fa-solid fa-hard-drive"></i> <span id="storageStatusText">Uložené na disku</span>
+                    </span>
+                </div>
+
+                <div class="header-actions">
+                    <button class="btn btn-primary btn-sm" id="quickAddBtn">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Nové predplatné</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Content Views -->
+            <main class="content-body">
+                <!-- VIEW 1: DASHBOARD / PREHĽAD -->
+                <section class="view-section active" id="view-dashboard">
+                    <!-- Metric Cards Grid -->
+                    <div class="metrics-grid">
+                        <div class="metric-card glass-card">
+                            <div class="metric-icon primary">
+                                <i class="fa-solid fa-calendar-days"></i>
+                            </div>
+                            <div class="metric-info">
+                                <span class="metric-label">Mesačné výdavky</span>
+                                <h3 class="metric-value" id="dashboardMonthly">0,00 €</h3>
+                                <span class="metric-subtext">Vypočítaný priemer za mesiac</span>
+                            </div>
+                        </div>
+
+                        <div class="metric-card glass-card">
+                            <div class="metric-icon accent">
+                                <i class="fa-solid fa-chart-line"></i>
+                            </div>
+                            <div class="metric-info">
+                                <span class="metric-label">Ročné výdavky</span>
+                                <h3 class="metric-value" id="dashboardYearly">0,00 €</h3>
+                                <span class="metric-subtext">Celkové náklady za 12 mesiacov</span>
+                            </div>
+                        </div>
+
+                        <div class="metric-card glass-card">
+                            <div class="metric-icon warning">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                            </div>
+                            <div class="metric-info">
+                                <span class="metric-label">Najbližšia platba</span>
+                                <h3 class="metric-value text-truncate" id="dashboardNextPayment">Žiadna</h3>
+                                <span class="metric-subtext" id="dashboardNextPaymentSubtext">Všetko uhradené</span>
+                            </div>
+                        </div>
+
+                        <div class="metric-card glass-card">
+                            <div class="metric-icon success">
+                                <i class="fa-solid fa-cubes"></i>
+                            </div>
+                            <div class="metric-info">
+                                <span class="metric-label">Aktívne služby</span>
+                                <h3 class="metric-value" id="dashboardCount">0</h3>
+                                <span class="metric-subtext" id="dashboardCountSubtext">Sledovaných predplatných</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notification Banner (If payments within 7 days) -->
+                    <div class="alert-banner glass-card hidden" id="dashboardAlertBanner">
+                        <div class="alert-icon">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                        </div>
+                        <div class="alert-content">
+                            <h4 id="alertBannerTitle">Blížia sa platby!</h4>
+                            <p id="alertBannerText">Máte 0 platieb splatných v najbližších dňoch.</p>
+                        </div>
+                        <button class="btn btn-outline btn-sm" id="viewAlertsBtn">Zobraziť upozornenia</button>
+                    </div>
+
+                    <!-- Dashboard Sections Grid -->
+                    <div class="dashboard-grid">
+                        <!-- Upcoming Payments Card -->
+                        <div class="dashboard-card glass-card span-2">
+                            <div class="card-header">
+                                <h3><i class="fa-solid fa-calendar-check text-primary"></i> Najbližšie platby</h3>
+                                <button class="btn-link" id="goToSubscriptionsBtn">Zobraziť všetky <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Služba</th>
+                                                <th>Kategória</th>
+                                                <th>Suma</th>
+                                                <th>Dátum platby</th>
+                                                <th>Stav</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="dashboardUpcomingTable">
+                                            <!-- Dynamic JS Content -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="empty-state hidden" id="dashboardUpcomingEmpty">
+                                    <i class="fa-regular fa-folder-open"></i>
+                                    <p>Nemáte žiadne pridané predplatné.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Category Breakdown Card -->
+                        <div class="dashboard-card glass-card">
+                            <div class="card-header">
+                                <h3><i class="fa-solid fa-chart-pie text-accent"></i> Podľa kategórií</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="categories-list" id="dashboardCategoriesList">
+                                    <!-- Dynamic JS Content -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 2: MOJE PREDPLATNÉ (ZOZNAM & SPRÁVA) -->
+                <section class="view-section" id="view-subscriptions">
+                    <div class="section-toolbar glass-card">
+                        <div class="search-box">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="searchInput" placeholder="Vyhľadať službu...">
+                        </div>
+                        <div class="filter-controls">
+                            <select id="categoryFilter" class="form-select">
+                                <option value="all">Všetky kategórie</option>
+                                <option value="Zábava">Zábava</option>
+                                <option value="Práca">Práca</option>
+                                <option value="Nástroje">Nástroje</option>
+                                <option value="Zdravie">Zdravie</option>
+                                <option value="Domácnosť">Domácnosť</option>
+                                <option value="Iné">Iné</option>
+                            </select>
+
+                            <select id="sortBySelect" class="form-select">
+                                <option value="nextPayment">Zoradiť: Najbližšia platba</option>
+                                <option value="priceDesc">Zoradiť: Najdrahšie</option>
+                                <option value="priceAsc">Zoradiť: Najlacnejšie</option>
+                                <option value="nameAsc">Zoradiť: Abecedne (A-Z)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="subscriptions-grid" id="subscriptionsContainer">
+                        <!-- Dynamic Cards JS -->
+                    </div>
+
+                    <div class="empty-state glass-card hidden" id="subscriptionsEmpty">
+                        <i class="fa-solid fa-receipt"></i>
+                        <h3>Žiadne predplatné nenájdené</h3>
+                        <p>Skúste zmeniť vyhľadávanie alebo pridajte svoje prvé predplatné.</p>
+                        <button class="btn btn-primary" id="emptyAddBtn">
+                            <i class="fa-solid fa-plus"></i> Pridať nové predplatné
+                        </button>
+                    </div>
+                </section>
+
+                <!-- VIEW 3: PRIDAŤ PREDPLATNÉ -->
+                <section class="view-section" id="view-add-subscription">
+                    <div class="form-container glass-card">
+                        <div class="form-header">
+                            <h2>Pridať nové predplatné</h2>
+                            <p>Zadajte podrobnosti o pravidelnej platbe pre automatické sledovanie.</p>
+                        </div>
+
+                        <form id="subscriptionForm" class="app-form">
+                            <div class="form-grid">
+                                <div class="form-group full-width">
+                                    <label for="subName">Názov služby *</label>
+                                    <input type="text" id="subName" class="form-control" placeholder="napr. Netflix, Spotify, Internet..." required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="subPrice">Suma (€) *</label>
+                                    <input type="number" id="subPrice" class="form-control" placeholder="0.00" step="0.01" min="0.01" required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="subBillingCycle">Frekvencia platby *</label>
+                                    <select id="subBillingCycle" class="form-control" required>
+                                        <option value="monthly">Mesačne</option>
+                                        <option value="yearly">Ročne</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="subCategory">Kategória *</label>
+                                    <select id="subCategory" class="form-control" required>
+                                        <option value="Zábava">Zábava (Streaming, Hry)</option>
+                                        <option value="Práca">Práca (Software, Cloud)</option>
+                                        <option value="Nástroje">Nástroje (AI, Hosting)</option>
+                                        <option value="Zdravie">Zdravie & Šport (Fitness, Appky)</option>
+                                        <option value="Domácnosť">Domácnosť (Internet, Energie)</option>
+                                        <option value="Iné">Iné</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="subPaymentMethod">Spôsob platby</label>
+                                    <select id="subPaymentMethod" class="form-control">
+                                        <option value="Platebná karta">Platebná karta</option>
+                                        <option value="PayPal">PayPal</option>
+                                        <option value="Bankový prevod">Bankový prevod</option>
+                                        <option value="Apple Pay">Apple Pay</option>
+                                        <option value="Google Pay">Google Pay</option>
+                                        <option value="Iné">Iné</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="subNextPaymentDate">Dátum nasledujúcej platby *</label>
+                                    <input type="date" id="subNextPaymentDate" class="form-control" required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="subColor">Farba ikony</label>
+                                    <div class="color-picker-group">
+                                        <input type="color" id="subColor" class="color-picker" value="#6366f1">
+                                        <span class="color-preview-text">Vyberte si farbu pre vizualizáciu</span>
+                                    </div>
+                                </div>
+
+                                <div class="form-group full-width">
+                                    <label for="subNotes">Poznámka (Voliteľné)</label>
+                                    <textarea id="subNotes" class="form-control" rows="2" placeholder="napr. Rodinné konto, obnovuje sa automaticky..."></textarea>
+                                </div>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" id="cancelFormBtn">Zrušiť</button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fa-solid fa-floppy-disk"></i> Uložiť predplatné
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- VIEW 4: KALKULAČKA ÚSPOR (ČO AK...) -->
+                <section class="view-section" id="view-calculator">
+                    <div class="calculator-hero glass-card">
+                        <div class="calc-hero-content">
+                            <h2>Interaktívny kalkulátor úspor ("Čo ak...")</h2>
+                            <p>Označte služby, ktoré by ste chceli zrušiť alebo pozastaviť. Kalkulačka vám okamžite vypočíta, koľko peňazí ušetríte.</p>
+                        </div>
+                    </div>
+
+                    <div class="calculator-grid">
+                        <!-- Left Column: Checkbox Selection List -->
+                        <div class="calc-list-card glass-card">
+                            <div class="card-header">
+                                <h3>Vyberte služby na zrušenie</h3>
+                                <button class="btn-link" id="calcSelectAllBtn">Označiť všetky</button>
+                            </div>
+                            <div class="calc-items-container" id="calcItemsContainer">
+                                <!-- Dynamic JS Checkboxes -->
+                            </div>
+                        </div>
+
+                        <!-- Right Column: Savings Results & Targets -->
+                        <div class="calc-results-card glass-card">
+                            <div class="results-header">
+                                <h3>Vaše potenciálne úspory</h3>
+                            </div>
+
+                            <div class="savings-display">
+                                <div class="savings-metric highlight">
+                                    <span class="savings-label">Mesačne ušetríte:</span>
+                                    <h2 class="savings-amount text-success" id="calcMonthlySavings">0,00 €</h2>
+                                </div>
+                                <div class="savings-metric">
+                                    <span class="savings-label">Ročne ušetríte:</span>
+                                    <h3 class="savings-amount" id="calcYearlySavings">0,00 €</h3>
+                                </div>
+                            </div>
+
+                            <div class="savings-targets">
+                                <h4>Čo si za to môžete dopriať za rok?</h4>
+                                <div class="targets-list" id="calcTargetsList">
+                                    <!-- Dynamic Milestones -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 5: UPOZORNENIA (NOTIFIKÁCIE) -->
+                <section class="view-section" id="view-notifications">
+                    <div class="notifications-container glass-card">
+                        <div class="notifications-header">
+                            <div>
+                                <h2>Nadchádzajúce platby</h2>
+                                <p>Prehľad platieb, ktoré vás čakajú v najbližšom období.</p>
+                            </div>
+                            <div class="days-filter-group">
+                                <button class="btn btn-sm btn-outline active" data-days="7">7 dní</button>
+                                <button class="btn btn-sm btn-outline" data-days="14">14 dní</button>
+                                <button class="btn btn-sm btn-outline" data-days="30">30 dní</button>
+                            </div>
+                        </div>
+
+                        <div class="notifications-list" id="notificationsList">
+                            <!-- Dynamic JS Items -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 6: EXPORT A ZÁLOHA -->
+                <section class="view-section" id="view-export">
+                    <div class="export-grid">
+                        <!-- CSV Export Card -->
+                        <div class="export-card glass-card">
+                            <div class="export-icon">
+                                <i class="fa-solid fa-file-csv"></i>
+                            </div>
+                            <h3>Export do CSV</h3>
+                            <p>Stiahnite si prehľadný tabuľkový zoznam všetkých vašich predplatných vo formáte CSV vhodnom pre MS Excel alebo Google Tabuľky.</p>
+                            <button class="btn btn-primary" id="exportCsvBtn">
+                                <i class="fa-solid fa-download"></i> Stiahnuť CSV súbor
+                            </button>
+                        </div>
+
+                        <!-- JSON Backup & Restore Card -->
+                        <div class="export-card glass-card">
+                            <div class="export-icon accent">
+                                <i class="fa-solid fa-database"></i>
+                            </div>
+                            <h3>Záloha a Obnova (JSON)</h3>
+                            <p>Exportujte si kompletnú databázu pre zálohu na disk alebo prenos na iné zariadenie. Databázu môžete opätovne importovať.</p>
+                            <div class="export-btn-group">
+                                <button class="btn btn-secondary" id="exportJsonBtn">
+                                    <i class="fa-solid fa-file-export"></i> Stiahnuť JSON
+                                </button>
+                                <label for="importJsonInput" class="btn btn-outline">
+                                    <i class="fa-solid fa-file-import"></i> Nahrať JSON
+                                </label>
+                                <input type="file" id="importJsonInput" accept=".json" class="hidden">
+                            </div>
+                        </div>
+
+                        <!-- Demo Reset Card -->
+                        <div class="export-card glass-card">
+                            <div class="export-icon danger">
+                                <i class="fa-solid fa-arrow-rotate-left"></i>
+                            </div>
+                            <h3>Obnova demo dát</h3>
+                            <p>Chcete vyskúšať aplikáciu s novými ukážkovými údajmi? Môžete obnoviť pôvodné demo predplatné.</p>
+                            <button class="btn btn-danger-outline" id="resetDemoBtn">
+                                <i class="fa-solid fa-rotate"></i> Obnoviť ukážkové dáta
+                            </button>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- MODAL DIALOG: EDIT SUBSCRIPTION -->
+    <dialog class="modal-dialog glass-modal" id="editModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Upraviť predplatné</h3>
+                <button class="close-modal-btn" id="closeEditModalBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="editForm" class="app-form">
+                <input type="hidden" id="editSubId">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label for="editSubName">Názov služby *</label>
+                        <input type="text" id="editSubName" class="form-control" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editSubPrice">Suma (€) *</label>
+                        <input type="number" id="editSubPrice" class="form-control" step="0.01" min="0.01" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editSubBillingCycle">Frekvencia platby *</label>
+                        <select id="editSubBillingCycle" class="form-control" required>
+                            <option value="monthly">Mesačne</option>
+                            <option value="yearly">Ročne</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editSubCategory">Kategória *</label>
+                        <select id="editSubCategory" class="form-control" required>
+                            <option value="Zábava">Zábava</option>
+                            <option value="Práca">Práca</option>
+                            <option value="Nástroje">Nástroje</option>
+                            <option value="Zdravie">Zdravie</option>
+                            <option value="Domácnosť">Domácnosť</option>
+                            <option value="Iné">Iné</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editSubPaymentMethod">Spôsob platby</label>
+                        <select id="editSubPaymentMethod" class="form-control">
+                            <option value="Platebná karta">Platebná karta</option>
+                            <option value="PayPal">PayPal</option>
+                            <option value="Bankový prevod">Bankový prevod</option>
+                            <option value="Apple Pay">Apple Pay</option>
+                            <option value="Google Pay">Google Pay</option>
+                            <option value="Iné">Iné</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editSubNextPaymentDate">Dátum nasledujúcej platby *</label>
+                        <input type="date" id="editSubNextPaymentDate" class="form-control" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editSubColor">Farba ikony</label>
+                        <input type="color" id="editSubColor" class="color-picker">
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="editSubNotes">Poznámka</label>
+                        <textarea id="editSubNotes" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelEditBtn">Zrušiť</button>
+                    <button type="submit" class="btn btn-primary">Uložiť zmeny</button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+
+    <!-- MODAL DIALOG: CONFIRM DELETE -->
+    <dialog class="modal-dialog glass-modal" id="deleteModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="text-danger"><i class="fa-solid fa-triangle-exclamation"></i> Potvrdiť zmazanie</h3>
+                <button class="close-modal-btn" id="closeDeleteModalBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p>Naozaj chcete odstrániť predplatné <strong id="deleteTargetName">...</strong>?</p>
+                <p class="text-subtle">Túto akciu nie je možné vrátiť späť.</p>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="cancelDeleteBtn">Zrušiť</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Odstrániť</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Application Script -->
+    <script src="app.js"></script>
+</body>
+</html>

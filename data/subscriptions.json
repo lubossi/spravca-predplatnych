@@ -1,0 +1,14 @@
+[
+  {
+    "id": "sub_demo_7",
+    "name": "iCloud+ 200GB",
+    "price": 2.99,
+    "billingCycle": "monthly",
+    "category": "Nástroje",
+    "paymentMethod": "Apple Pay",
+    "nextPaymentDate": "2026-08-15",
+    "color": "#3b82f6",
+    "notes": "Zálohovanie fotiek a iPhone",
+    "active": true
+  }
+]
