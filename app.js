@@ -1,107 +1,53 @@
 /**
  * SPRÁVCA PREDPLATNÝCH (Subscription Manager)
- * Main Client Application Logic with Disk Storage & REST API
+ * Supabase Cloud Storage Edition – synchronizácia medzi všetkými zariadeniami
+ *
+ * Priorita ukladania:
+ *   1. Supabase (online) – zdieľané medzi Macom, Windowsom, mobilom
+ *   2. LocalStorage (offline fallback) – keď nie je internet
  */
 
+// ============================================================
+//  SUPABASE KONFIGURÁCIA
+// ============================================================
+const SUPABASE_URL = 'https://dhkxjrttoitqtecrsgzj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoa3hqcnR0b2l0cXRlY3JzZ3pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3Mjc1MzcsImV4cCI6MjEwMjMwMzUzN30.8bSYvp7bqk_gGzQJ1cU6fjhTJoYMFEEHPlHcXvZA-G4';
+const TABLE = 'subscriptions';
+
+let supabase = null;
+try {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} catch (e) {
+    console.warn('Supabase klient sa nepodarilo inicializovať:', e);
+}
+
+// ============================================================
+//  HLAVNÁ LOGIKA APLIKÁCIE
+// ============================================================
 document.addEventListener('DOMContentLoaded', () => {
-    // App State
+    // ——— App State ———
     let subscriptions = [];
     let currentView = 'dashboard';
     let deleteTargetId = null;
     let notificationDaysFilter = 7;
     let selectedCalcSubIds = new Set();
-    let isServerConnected = false;
+    let storageMode = 'loading'; // 'supabase' | 'localStorage' | 'loading'
 
     const STORAGE_KEY = 'spravca_predplatnych_data';
-    const API_BASE = '/api/subscriptions';
 
     const DEMO_SUBSCRIPTIONS = [
-        {
-            id: 'sub_demo_1',
-            name: 'Netflix Premium',
-            price: 17.99,
-            billingCycle: 'monthly',
-            category: 'Zábava',
-            paymentMethod: 'Platebná karta',
-            nextPaymentDate: getRelativeDate(3),
-            color: '#e50914',
-            notes: '4K Ultra HD rodinné konto',
-            active: true
-        },
-        {
-            id: 'sub_demo_2',
-            name: 'Spotify Family',
-            price: 10.99,
-            billingCycle: 'monthly',
-            category: 'Zábava',
-            paymentMethod: 'PayPal',
-            nextPaymentDate: getRelativeDate(11),
-            color: '#1db954',
-            notes: 'Pre 6 členov rodiny',
-            active: true
-        },
-        {
-            id: 'sub_demo_3',
-            name: 'Optický Internet Telekom',
-            price: 22.90,
-            billingCycle: 'monthly',
-            category: 'Domácnosť',
-            paymentMethod: 'Bankový prevod',
-            nextPaymentDate: getRelativeDate(1),
-            color: '#e20074',
-            notes: 'Rýchlosť 500/50 Mbps',
-            active: true
-        },
-        {
-            id: 'sub_demo_4',
-            name: 'Posilňovňa GymBeam',
-            price: 29.00,
-            billingCycle: 'monthly',
-            category: 'Zdravie',
-            paymentMethod: 'Platebná karta',
-            nextPaymentDate: getRelativeDate(6),
-            color: '#f59e0b',
-            notes: 'Mesačné členstvo bez viazanosti',
-            active: true
-        },
-        {
-            id: 'sub_demo_5',
-            name: 'ChatGPT Plus (OpenAI)',
-            price: 20.00,
-            billingCycle: 'monthly',
-            category: 'Nástroje',
-            paymentMethod: 'Apple Pay',
-            nextPaymentDate: getRelativeDate(18),
-            color: '#10a37f',
-            notes: 'GPT-4o a generovanie obrázkov',
-            active: true
-        },
-        {
-            id: 'sub_demo_6',
-            name: 'Adobe Creative Cloud',
-            price: 380.00,
-            billingCycle: 'yearly',
-            category: 'Práca',
-            paymentMethod: 'Platebná karta',
-            nextPaymentDate: getRelativeDate(45),
-            color: '#ff0000',
-            notes: 'Ročné predplatné pre grafiku',
-            active: true
-        },
-        {
-            id: 'sub_demo_7',
-            name: 'iCloud+ 200GB',
-            price: 2.99,
-            billingCycle: 'monthly',
-            category: 'Nástroje',
-            paymentMethod: 'Apple Pay',
-            nextPaymentDate: getRelativeDate(2),
-            color: '#3b82f6',
-            notes: 'Zálohovanie fotiek a iPhone',
-            active: true
-        }
+        { id: 'sub_demo_1', name: 'Netflix Premium', price: 17.99, billingCycle: 'monthly', category: 'Zábava', paymentMethod: 'Platebná karta', nextPaymentDate: getRelativeDate(3), color: '#e50914', notes: '4K Ultra HD rodinné konto', active: true },
+        { id: 'sub_demo_2', name: 'Spotify Family', price: 10.99, billingCycle: 'monthly', category: 'Zábava', paymentMethod: 'PayPal', nextPaymentDate: getRelativeDate(11), color: '#1db954', notes: 'Pre 6 členov rodiny', active: true },
+        { id: 'sub_demo_3', name: 'Optický Internet Telekom', price: 22.90, billingCycle: 'monthly', category: 'Domácnosť', paymentMethod: 'Bankový prevod', nextPaymentDate: getRelativeDate(1), color: '#e20074', notes: 'Rýchlosť 500/50 Mbps', active: true },
+        { id: 'sub_demo_4', name: 'Posilňovňa GymBeam', price: 29.00, billingCycle: 'monthly', category: 'Zdravie', paymentMethod: 'Platebná karta', nextPaymentDate: getRelativeDate(6), color: '#f59e0b', notes: 'Mesačné členstvo bez viazanosti', active: true },
+        { id: 'sub_demo_5', name: 'ChatGPT Plus (OpenAI)', price: 20.00, billingCycle: 'monthly', category: 'Nástroje', paymentMethod: 'Apple Pay', nextPaymentDate: getRelativeDate(18), color: '#10a37f', notes: 'GPT-4o a generovanie obrázkov', active: true },
+        { id: 'sub_demo_6', name: 'Adobe Creative Cloud', price: 380.00, billingCycle: 'yearly', category: 'Práca', paymentMethod: 'Platebná karta', nextPaymentDate: getRelativeDate(45), color: '#ff0000', notes: 'Ročné predplatné pre grafiku', active: true },
+        { id: 'sub_demo_7', name: 'iCloud+ 200GB', price: 2.99, billingCycle: 'monthly', category: 'Nástroje', paymentMethod: 'Apple Pay', nextPaymentDate: getRelativeDate(2), color: '#3b82f6', notes: 'Zálohovanie fotiek a iPhone', active: true }
     ];
 
+    // ============================================================
+    //  POMOCNÉ FUNKCIE
+    // ============================================================
     function getRelativeDate(daysAhead) {
         const d = new Date();
         d.setDate(d.getDate() + daysAhead);
@@ -123,158 +69,256 @@ document.addEventListener('DOMContentLoaded', () => {
         today.setHours(0, 0, 0, 0);
         const target = new Date(dateString);
         target.setHours(0, 0, 0, 0);
-        const diffTime = target - today;
-        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
     }
 
-    // Storage Status UI
+    function escapeHtml(text) {
+        if (!text) return '';
+        return text.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
+    }
+
+    // Konverzia z DB snake_case do JS camelCase
+    function dbToApp(row) {
+        return {
+            id: row.id,
+            name: row.name,
+            price: parseFloat(row.price),
+            billingCycle: row.billing_cycle,
+            category: row.category,
+            paymentMethod: row.payment_method || 'Platebná karta',
+            nextPaymentDate: row.next_payment_date,
+            color: row.color || '#6366f1',
+            notes: row.notes || '',
+            active: row.active !== false
+        };
+    }
+
+    // Konverzia z JS camelCase do DB snake_case
+    function appToDB(sub) {
+        return {
+            id: sub.id,
+            name: sub.name,
+            price: sub.price,
+            billing_cycle: sub.billingCycle,
+            category: sub.category,
+            payment_method: sub.paymentMethod,
+            next_payment_date: sub.nextPaymentDate,
+            color: sub.color,
+            notes: sub.notes || '',
+            active: sub.active !== false
+        };
+    }
+
+    // ============================================================
+    //  STORAGE STATUS BADGE
+    // ============================================================
     function updateStorageStatusBadge() {
         const badge = document.getElementById('storageStatusBadge');
-        const text = document.getElementById('storageStatusText');
-        if (!badge || !text) return;
-
-        if (isServerConnected) {
+        if (!badge) return;
+        if (storageMode === 'supabase') {
             badge.classList.remove('offline');
-            badge.innerHTML = `<i class="fa-solid fa-hard-drive"></i> Uložené na disku (data/subscriptions.json)`;
+            badge.innerHTML = `<i class="fa-solid fa-cloud"></i> Synchronizované cez Supabase`;
+        } else if (storageMode === 'localStorage') {
+            badge.classList.add('offline');
+            badge.innerHTML = `<i class="fa-solid fa-database"></i> Offline (LocalStorage)`;
         } else {
             badge.classList.add('offline');
-            badge.innerHTML = `<i class="fa-solid fa-database"></i> Uložené v LocalStorage (Offline Režim)`;
+            badge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Pripájam sa...`;
         }
     }
 
-    // API & Local Storage Operations
-    async function loadData() {
+    // ============================================================
+    //  SUPABASE – CRUD OPERÁCIE
+    // ============================================================
+    async function loadFromSupabase() {
+        if (!supabase) return null;
         try {
-            const res = await fetch(API_BASE, { method: 'GET', headers: { 'Accept': 'application/json' } });
-            if (res.ok) {
-                const data = await res.json();
-                subscriptions = Array.isArray(data) ? data : [];
-                isServerConnected = true;
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
-                updateStorageStatusBadge();
-                updateAllViews();
-                return;
-            }
+            const { data, error } = await supabase
+                .from(TABLE)
+                .select('*')
+                .order('next_payment_date', { ascending: true });
+            if (error) throw error;
+            return data.map(dbToApp);
         } catch (e) {
-            console.warn('Backend API nedostupné, prepínam na LocalStorage:', e.message);
+            console.warn('Supabase načítanie zlyhalo:', e.message);
+            return null;
         }
+    }
 
-        // Fallback to LocalStorage
-        isServerConnected = false;
+    async function addToSupabase(sub) {
+        if (!supabase) return false;
+        try {
+            const { error } = await supabase.from(TABLE).insert(appToDB(sub));
+            if (error) throw error;
+            return true;
+        } catch (e) {
+            console.warn('Supabase insert zlyhalo:', e.message);
+            return false;
+        }
+    }
+
+    async function updateInSupabase(sub) {
+        if (!supabase) return false;
+        try {
+            const { error } = await supabase.from(TABLE).update(appToDB(sub)).eq('id', sub.id);
+            if (error) throw error;
+            return true;
+        } catch (e) {
+            console.warn('Supabase update zlyhalo:', e.message);
+            return false;
+        }
+    }
+
+    async function deleteFromSupabase(subId) {
+        if (!supabase) return false;
+        try {
+            const { error } = await supabase.from(TABLE).delete().eq('id', subId);
+            if (error) throw error;
+            return true;
+        } catch (e) {
+            console.warn('Supabase delete zlyhalo:', e.message);
+            return false;
+        }
+    }
+
+    async function bulkUpsertToSupabase(subs) {
+        if (!supabase) return false;
+        try {
+            const { error } = await supabase.from(TABLE).upsert(subs.map(appToDB));
+            if (error) throw error;
+            return true;
+        } catch (e) {
+            console.warn('Supabase upsert zlyhalo:', e.message);
+            return false;
+        }
+    }
+
+    async function deleteAllFromSupabase() {
+        if (!supabase) return false;
+        try {
+            const { error } = await supabase.from(TABLE).delete().neq('id', '___none___');
+            if (error) throw error;
+            return true;
+        } catch (e) {
+            console.warn('Supabase delete all zlyhalo:', e.message);
+            return false;
+        }
+    }
+
+    // ============================================================
+    //  INICIALIZÁCIA DÁT (Supabase → LocalStorage fallback)
+    // ============================================================
+    async function initData() {
+        storageMode = 'loading';
         updateStorageStatusBadge();
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-            try {
-                subscriptions = JSON.parse(raw);
-            } catch (err) {
-                subscriptions = [...DEMO_SUBSCRIPTIONS];
+
+        // Pokús sa načítať zo Supabase
+        const cloudData = await loadFromSupabase();
+
+        if (cloudData !== null) {
+            storageMode = 'supabase';
+            if (cloudData.length === 0) {
+                // Prvé spustenie – nahraj demo dáta do Supabase
+                const ok = await bulkUpsertToSupabase(DEMO_SUBSCRIPTIONS);
+                if (ok) {
+                    subscriptions = [...DEMO_SUBSCRIPTIONS];
+                    showToast('Pripojené na Supabase! Demo predplatné boli vytvorené.', 'success');
+                }
+            } else {
+                subscriptions = cloudData;
+                // Synchronizuj LocalStorage ako zálohu
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
+                showToast('Predplatné načítané zo Supabase ☁️', 'info');
             }
         } else {
-            subscriptions = [...DEMO_SUBSCRIPTIONS];
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
-        }
-        updateAllViews();
-    }
-
-    async function addSubscriptionAPI(newSub) {
-        if (isServerConnected) {
-            try {
-                const res = await fetch(API_BASE, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(newSub)
-                });
-                if (res.ok) {
-                    subscriptions.push(newSub);
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
-                    updateAllViews();
-                    return true;
-                }
-            } catch (e) {
-                console.error('API Error:', e);
+            // Offline fallback – LocalStorage
+            storageMode = 'localStorage';
+            showToast('Supabase nedostupné – používam offline zálohu.', 'warning');
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                try { subscriptions = JSON.parse(raw); }
+                catch (e) { subscriptions = [...DEMO_SUBSCRIPTIONS]; }
+            } else {
+                subscriptions = [...DEMO_SUBSCRIPTIONS];
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
             }
         }
 
-        // Local fallback
-        subscriptions.push(newSub);
+        updateStorageStatusBadge();
+        updateAllViews();
+    }
+
+    function syncToLocalStorage() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
-        updateAllViews();
-        return true;
     }
 
-    async function updateSubscriptionAPI(updatedSub) {
-        if (isServerConnected) {
-            try {
-                const res = await fetch(`${API_BASE}/${updatedSub.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(updatedSub)
-                });
-                if (res.ok) {
-                    const idx = subscriptions.findIndex(s => s.id === updatedSub.id);
-                    if (idx !== -1) subscriptions[idx] = updatedSub;
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
-                    updateAllViews();
-                    return true;
-                }
-            } catch (e) {
-                console.error('API Error:', e);
-            }
+    // ============================================================
+    //  CRUD OBÁLKY – Supabase + LocalStorage záloha
+    // ============================================================
+    async function addSubscription(newSub) {
+        subscriptions.push(newSub);
+        syncToLocalStorage();
+        updateAllViews();
+        if (storageMode === 'supabase') {
+            const ok = await addToSupabase(newSub);
+            if (!ok) showToast('Predplatné uložené lokálne, Supabase sync zlyhal.', 'warning');
         }
+    }
 
-        // Local fallback
+    async function updateSubscription(updatedSub) {
         const idx = subscriptions.findIndex(s => s.id === updatedSub.id);
         if (idx !== -1) subscriptions[idx] = updatedSub;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
+        syncToLocalStorage();
         updateAllViews();
-        return true;
+        if (storageMode === 'supabase') {
+            const ok = await updateInSupabase(updatedSub);
+            if (!ok) showToast('Zmeny uložené lokálne, Supabase sync zlyhal.', 'warning');
+        }
     }
 
-    async function deleteSubscriptionAPI(subId) {
-        if (isServerConnected) {
-            try {
-                const res = await fetch(`${API_BASE}/${subId}`, { method: 'DELETE' });
-                if (res.ok) {
-                    subscriptions = subscriptions.filter(s => s.id !== subId);
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
-                    updateAllViews();
-                    return true;
-                }
-            } catch (e) {
-                console.error('API Error:', e);
-            }
-        }
-
-        // Local fallback
+    async function deleteSubscription(subId) {
         subscriptions = subscriptions.filter(s => s.id !== subId);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
+        syncToLocalStorage();
         updateAllViews();
-        return true;
-    }
-
-    async function resetDemoDataAPI() {
-        if (isServerConnected) {
-            try {
-                const res = await fetch(`${API_BASE}/reset`, { method: 'POST' });
-                if (res.ok) {
-                    const data = await res.json();
-                    subscriptions = data;
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
-                    updateAllViews();
-                    return true;
-                }
-            } catch (e) {
-                console.error('API Error:', e);
-            }
+        if (storageMode === 'supabase') {
+            const ok = await deleteFromSupabase(subId);
+            if (!ok) showToast('Zmazané lokálne, Supabase sync zlyhal.', 'warning');
         }
-
-        subscriptions = JSON.parse(JSON.stringify(DEMO_SUBSCRIPTIONS));
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
-        updateAllViews();
-        return true;
     }
 
-    // UI View Navigation
+    async function resetToDemo() {
+        subscriptions = JSON.parse(JSON.stringify(DEMO_SUBSCRIPTIONS));
+        syncToLocalStorage();
+        updateAllViews();
+        if (storageMode === 'supabase') {
+            await deleteAllFromSupabase();
+            await bulkUpsertToSupabase(subscriptions);
+        }
+    }
+
+    // ============================================================
+    //  REAL-TIME SYNC (Supabase Realtime)
+    // ============================================================
+    function subscribeToRealtime() {
+        if (!supabase || storageMode !== 'supabase') return;
+        supabase
+            .channel('subscriptions-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, async (payload) => {
+                // Obnoví dáta pri každej zmene z iného zariadenia
+                const freshData = await loadFromSupabase();
+                if (freshData !== null) {
+                    subscriptions = freshData;
+                    syncToLocalStorage();
+                    updateAllViews();
+                    showToast('Dáta synchronizované z iného zariadenia ☁️', 'info');
+                }
+            })
+            .subscribe();
+    }
+
+    // ============================================================
+    //  NAVIGÁCIA
+    // ============================================================
     const navLinks = document.querySelectorAll('.nav-link');
     const viewSections = document.querySelectorAll('.view-section');
     const pageTitle = document.getElementById('pageTitle');
@@ -285,17 +329,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function switchView(viewName) {
         currentView = viewName;
-
         navLinks.forEach(link => {
-            if (link.getAttribute('data-view') === viewName) link.classList.add('active');
-            else link.classList.remove('active');
+            link.classList.toggle('active', link.getAttribute('data-view') === viewName);
         });
-
         viewSections.forEach(section => {
-            if (section.id === `view-${viewName}`) section.classList.add('active');
-            else section.classList.remove('active');
+            section.classList.toggle('active', section.id === `view-${viewName}`);
         });
-
         const titleMap = {
             'dashboard': 'Prehľad',
             'subscriptions': 'Moje predplatné',
@@ -305,201 +344,118 @@ document.addEventListener('DOMContentLoaded', () => {
             'export': 'Export a záloha dát'
         };
         pageTitle.textContent = titleMap[viewName] || 'Správca predplatných';
-
         sidebar.classList.remove('active');
         sidebarOverlay.classList.remove('active');
-
         window.scrollTo({ top: 0, behavior: 'smooth' });
-
         if (viewName === 'calculator') renderCalculator();
         if (viewName === 'notifications') renderNotifications();
         if (viewName === 'subscriptions') renderSubscriptions();
         if (viewName === 'dashboard') renderDashboard();
     }
 
-    mobileToggleBtn.addEventListener('click', () => {
-        sidebar.classList.add('active');
-        sidebarOverlay.classList.add('active');
-    });
-
-    closeSidebarBtn.addEventListener('click', () => {
-        sidebar.classList.remove('active');
-        sidebarOverlay.classList.remove('active');
-    });
-
-    sidebarOverlay.addEventListener('click', () => {
-        sidebar.classList.remove('active');
-        sidebarOverlay.classList.remove('active');
-    });
-
-    navLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            switchView(link.getAttribute('data-view'));
-        });
-    });
+    mobileToggleBtn.addEventListener('click', () => { sidebar.classList.add('active'); sidebarOverlay.classList.add('active'); });
+    closeSidebarBtn.addEventListener('click', () => { sidebar.classList.remove('active'); sidebarOverlay.classList.remove('active'); });
+    sidebarOverlay.addEventListener('click', () => { sidebar.classList.remove('active'); sidebarOverlay.classList.remove('active'); });
+    navLinks.forEach(link => link.addEventListener('click', e => { e.preventDefault(); switchView(link.getAttribute('data-view')); }));
 
     document.getElementById('quickAddBtn').addEventListener('click', () => switchView('add-subscription'));
     document.getElementById('goToSubscriptionsBtn')?.addEventListener('click', () => switchView('subscriptions'));
     document.getElementById('viewAlertsBtn')?.addEventListener('click', () => switchView('notifications'));
 
-    // Calculations
+    // ============================================================
+    //  VÝPOČTY
+    // ============================================================
     function getTotals() {
-        let monthlyTotal = 0;
-        let yearlyTotal = 0;
-
+        let monthlyTotal = 0, yearlyTotal = 0;
         subscriptions.forEach(sub => {
             const price = parseFloat(sub.price) || 0;
-            if (sub.billingCycle === 'monthly') {
-                monthlyTotal += price;
-                yearlyTotal += price * 12;
-            } else if (sub.billingCycle === 'yearly') {
-                monthlyTotal += price / 12;
-                yearlyTotal += price;
-            }
+            monthlyTotal += sub.billingCycle === 'monthly' ? price : price / 12;
+            yearlyTotal += sub.billingCycle === 'monthly' ? price * 12 : price;
         });
-
         return { monthlyTotal, yearlyTotal };
     }
 
     function updateAllViews() {
-        const { monthlyTotal, yearlyTotal } = getTotals();
+        const { monthlyTotal } = getTotals();
         document.getElementById('sidebarMonthlyTotal').textContent = formatMoney(monthlyTotal);
-
         renderDashboard();
         renderSubscriptions();
         renderCalculator();
         renderNotifications();
     }
 
-    // 1. RENDER DASHBOARD
+    // ============================================================
+    //  1. DASHBOARD
+    // ============================================================
     function renderDashboard() {
         const { monthlyTotal, yearlyTotal } = getTotals();
-
         document.getElementById('dashboardMonthly').textContent = formatMoney(monthlyTotal);
         document.getElementById('dashboardYearly').textContent = formatMoney(yearlyTotal);
         document.getElementById('dashboardCount').textContent = subscriptions.length;
 
         const sorted = [...subscriptions].sort((a, b) => new Date(a.nextPaymentDate) - new Date(b.nextPaymentDate));
-        const dashboardNextPayment = document.getElementById('dashboardNextPayment');
-        const dashboardNextPaymentSubtext = document.getElementById('dashboardNextPaymentSubtext');
-
+        const nxt = document.getElementById('dashboardNextPayment');
+        const nxtSub = document.getElementById('dashboardNextPaymentSubtext');
         if (sorted.length > 0) {
             const nearest = sorted[0];
             const days = getDaysUntil(nearest.nextPaymentDate);
-            dashboardNextPayment.textContent = `${nearest.name} (${formatMoney(nearest.price)})`;
-            
-            if (days === 0) {
-                dashboardNextPaymentSubtext.textContent = 'Splatné dnes!';
-                dashboardNextPaymentSubtext.style.color = 'var(--danger)';
-            } else if (days === 1) {
-                dashboardNextPaymentSubtext.textContent = 'Splatné zajtra!';
-                dashboardNextPaymentSubtext.style.color = 'var(--warning)';
-            } else if (days < 0) {
-                dashboardNextPaymentSubtext.textContent = `Po splatnosti (${Math.abs(days)} dní)`;
-                dashboardNextPaymentSubtext.style.color = 'var(--danger)';
-            } else {
-                dashboardNextPaymentSubtext.textContent = `O ${days} dní (${formatDateSK(nearest.nextPaymentDate)})`;
-                dashboardNextPaymentSubtext.style.color = 'var(--text-subtle)';
-            }
-        } else {
-            dashboardNextPayment.textContent = 'Žiadne';
-            dashboardNextPaymentSubtext.textContent = 'Nemáte aktívne predplatné';
-        }
+            nxt.textContent = `${nearest.name} (${formatMoney(nearest.price)})`;
+            if (days === 0) { nxtSub.textContent = 'Splatné dnes!'; nxtSub.style.color = 'var(--danger)'; }
+            else if (days === 1) { nxtSub.textContent = 'Splatné zajtra!'; nxtSub.style.color = 'var(--warning)'; }
+            else if (days < 0) { nxtSub.textContent = `Po splatnosti (${Math.abs(days)} dní)`; nxtSub.style.color = 'var(--danger)'; }
+            else { nxtSub.textContent = `O ${days} dní (${formatDateSK(nearest.nextPaymentDate)})`; nxtSub.style.color = 'var(--text-subtle)'; }
+        } else { nxt.textContent = 'Žiadne'; nxtSub.textContent = 'Nemáte aktívne predplatné'; }
 
-        const imminentPayments = subscriptions.filter(sub => {
-            const days = getDaysUntil(sub.nextPaymentDate);
-            return days >= 0 && days <= 7;
-        });
-
+        const imminentPayments = subscriptions.filter(s => { const d = getDaysUntil(s.nextPaymentDate); return d >= 0 && d <= 7; });
         const alertBanner = document.getElementById('dashboardAlertBanner');
         if (imminentPayments.length > 0) {
             alertBanner.classList.remove('hidden');
             document.getElementById('alertBannerTitle').textContent = `Upozornenie: Blíži sa ${imminentPayments.length} platba!`;
-            document.getElementById('alertBannerText').textContent = `Máte platby splatné v najbližších 7 dňoch v celkovej hodnote ${formatMoney(imminentPayments.reduce((acc, curr) => acc + curr.price, 0))}.`;
-        } else {
-            alertBanner.classList.add('hidden');
-        }
+            document.getElementById('alertBannerText').textContent = `Máte platby splatné v najbližších 7 dňoch v celkovej hodnote ${formatMoney(imminentPayments.reduce((acc, s) => acc + s.price, 0))}.`;
+        } else { alertBanner.classList.add('hidden'); }
 
-        const upcomingTableBody = document.getElementById('dashboardUpcomingTable');
-        const upcomingEmpty = document.getElementById('dashboardUpcomingEmpty');
-        upcomingTableBody.innerHTML = '';
-
-        if (sorted.length === 0) {
-            upcomingEmpty.classList.remove('hidden');
-        } else {
-            upcomingEmpty.classList.add('hidden');
+        const tbody = document.getElementById('dashboardUpcomingTable');
+        tbody.innerHTML = '';
+        const emptyEl = document.getElementById('dashboardUpcomingEmpty');
+        if (sorted.length === 0) { emptyEl.classList.remove('hidden'); }
+        else {
+            emptyEl.classList.add('hidden');
             sorted.slice(0, 5).forEach(sub => {
                 const days = getDaysUntil(sub.nextPaymentDate);
-                let badgeHtml = '';
-                if (days < 0) badgeHtml = `<span class="badge badge-danger">Po splatnosti</span>`;
-                else if (days === 0) badgeHtml = `<span class="badge badge-danger">Dnes</span>`;
-                else if (days <= 3) badgeHtml = `<span class="badge badge-warning">O ${days} dni</span>`;
-                else badgeHtml = `<span class="badge badge-neutral">O ${days} dní</span>`;
-
+                let badgeHtml = days < 0 ? `<span class="badge badge-danger">Po splatnosti</span>` : days === 0 ? `<span class="badge badge-danger">Dnes</span>` : days <= 3 ? `<span class="badge badge-warning">O ${days} dni</span>` : `<span class="badge badge-neutral">O ${days} dní</span>`;
                 const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>
-                        <div class="sub-item-cell">
-                            <div class="sub-item-icon" style="background-color: ${sub.color || '#6366f1'}">
-                                <i class="fa-solid ${getCategoryIcon(sub.category)}"></i>
-                            </div>
-                            <span>${escapeHtml(sub.name)}</span>
-                        </div>
-                    </td>
-                    <td><span class="sub-badge-category">${escapeHtml(sub.category)}</span></td>
-                    <td><strong>${formatMoney(sub.price)}</strong> <small class="text-subtle">/${sub.billingCycle === 'monthly' ? 'mes.' : 'rok'}</small></td>
-                    <td>${formatDateSK(sub.nextPaymentDate)}</td>
-                    <td>${badgeHtml}</td>
-                `;
-                upcomingTableBody.appendChild(tr);
+                tr.innerHTML = `<td><div class="sub-item-cell"><div class="sub-item-icon" style="background-color:${sub.color||'#6366f1'}"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i></div><span>${escapeHtml(sub.name)}</span></div></td><td><span class="sub-badge-category">${escapeHtml(sub.category)}</span></td><td><strong>${formatMoney(sub.price)}</strong> <small class="text-subtle">/${sub.billingCycle==='monthly'?'mes.':'rok'}</small></td><td>${formatDateSK(sub.nextPaymentDate)}</td><td>${badgeHtml}</td>`;
+                tbody.appendChild(tr);
             });
         }
 
         const categoryTotals = {};
         subscriptions.forEach(sub => {
             const cat = sub.category || 'Iné';
-            const mPrice = sub.billingCycle === 'monthly' ? sub.price : sub.price / 12;
-            categoryTotals[cat] = (categoryTotals[cat] || 0) + mPrice;
+            categoryTotals[cat] = (categoryTotals[cat] || 0) + (sub.billingCycle === 'monthly' ? sub.price : sub.price / 12);
         });
-
-        const categoriesList = document.getElementById('dashboardCategoriesList');
-        categoriesList.innerHTML = '';
-
-        const catKeys = Object.keys(categoryTotals).sort((a, b) => categoryTotals[b] - categoryTotals[a]);
-        if (catKeys.length === 0) {
-            categoriesList.innerHTML = `<p class="text-subtle" style="text-align: center;">Žiadne dáta</p>`;
-        } else {
-            catKeys.forEach(cat => {
-                const val = categoryTotals[cat];
-                const pct = monthlyTotal > 0 ? Math.round((val / monthlyTotal) * 100) : 0;
-                const catColor = getCategoryColor(cat);
-
-                const div = document.createElement('div');
-                div.className = 'category-item';
-                div.innerHTML = `
-                    <div class="cat-item-top">
-                        <span class="cat-item-name"><i class="fa-solid ${getCategoryIcon(cat)}" style="color: ${catColor}; margin-right: 6px;"></i> ${cat} (${pct}%)</span>
-                        <span class="cat-item-price">${formatMoney(val)}/mes.</span>
-                    </div>
-                    <div class="progress-bar-bg">
-                        <div class="progress-bar-fill" style="width: ${pct}%; background: ${catColor};"></div>
-                    </div>
-                `;
-                categoriesList.appendChild(div);
-            });
-        }
+        const catList = document.getElementById('dashboardCategoriesList');
+        catList.innerHTML = '';
+        Object.keys(categoryTotals).sort((a, b) => categoryTotals[b] - categoryTotals[a]).forEach(cat => {
+            const val = categoryTotals[cat];
+            const pct = monthlyTotal > 0 ? Math.round((val / monthlyTotal) * 100) : 0;
+            const div = document.createElement('div');
+            div.className = 'category-item';
+            div.innerHTML = `<div class="cat-item-top"><span class="cat-item-name"><i class="fa-solid ${getCategoryIcon(cat)}" style="color:${getCategoryColor(cat)};margin-right:6px;"></i>${cat} (${pct}%)</span><span class="cat-item-price">${formatMoney(val)}/mes.</span></div><div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%;background:${getCategoryColor(cat)};"></div></div>`;
+            catList.appendChild(div);
+        });
+        if (!Object.keys(categoryTotals).length) catList.innerHTML = `<p class="text-subtle" style="text-align:center;">Žiadne dáta</p>`;
     }
 
-    // 2. RENDER SUBSCRIPTIONS LIST
+    // ============================================================
+    //  2. ZOZNAM PREDPLATNÝCH
+    // ============================================================
     const searchInput = document.getElementById('searchInput');
     const categoryFilter = document.getElementById('categoryFilter');
     const sortBySelect = document.getElementById('sortBySelect');
-
     searchInput.addEventListener('input', renderSubscriptions);
     categoryFilter.addEventListener('change', renderSubscriptions);
     sortBySelect.addEventListener('change', renderSubscriptions);
-
     document.getElementById('emptyAddBtn')?.addEventListener('click', () => switchView('add-subscription'));
 
     function renderSubscriptions() {
@@ -507,24 +463,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedCat = categoryFilter.value;
         const sortBy = sortBySelect.value;
 
-        let filtered = subscriptions.filter(sub => {
-            const matchQuery = sub.name.toLowerCase().includes(query) || (sub.notes && sub.notes.toLowerCase().includes(query));
-            const matchCat = selectedCat === 'all' || sub.category === selectedCat;
-            return matchQuery && matchCat;
+        let filtered = subscriptions.filter(s => {
+            const matchQ = s.name.toLowerCase().includes(query) || (s.notes && s.notes.toLowerCase().includes(query));
+            return matchQ && (selectedCat === 'all' || s.category === selectedCat);
         });
 
         filtered.sort((a, b) => {
             if (sortBy === 'nextPayment') return new Date(a.nextPaymentDate) - new Date(b.nextPaymentDate);
-            if (sortBy === 'priceDesc') {
-                const priceA = a.billingCycle === 'monthly' ? a.price : a.price / 12;
-                const priceB = b.billingCycle === 'monthly' ? b.price : b.price / 12;
-                return priceB - priceA;
-            }
-            if (sortBy === 'priceAsc') {
-                const priceA = a.billingCycle === 'monthly' ? a.price : a.price / 12;
-                const priceB = b.billingCycle === 'monthly' ? b.price : b.price / 12;
-                return priceA - priceB;
-            }
+            if (sortBy === 'priceDesc') return (b.billingCycle === 'monthly' ? b.price : b.price/12) - (a.billingCycle === 'monthly' ? a.price : a.price/12);
+            if (sortBy === 'priceAsc') return (a.billingCycle === 'monthly' ? a.price : a.price/12) - (b.billingCycle === 'monthly' ? b.price : b.price/12);
             if (sortBy === 'nameAsc') return a.name.localeCompare(b.name, 'sk');
             return 0;
         });
@@ -532,82 +479,46 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('subscriptionsContainer');
         const emptyState = document.getElementById('subscriptionsEmpty');
         container.innerHTML = '';
+        if (filtered.length === 0) { emptyState.classList.remove('hidden'); return; }
+        emptyState.classList.add('hidden');
 
-        if (filtered.length === 0) {
-            emptyState.classList.remove('hidden');
-        } else {
-            emptyState.classList.add('hidden');
-            filtered.forEach(sub => {
-                const days = getDaysUntil(sub.nextPaymentDate);
-                const card = document.createElement('div');
-                card.className = 'sub-card glass-card';
-                card.innerHTML = `
-                    <div class="sub-card-top">
-                        <span class="sub-badge-category"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i> ${escapeHtml(sub.category)}</span>
-                        <span class="badge ${days <= 3 ? 'badge-warning' : 'badge-neutral'}">
-                            ${days === 0 ? 'Dnes' : days > 0 ? `O ${days} dní` : 'Po splatnosti'}
-                        </span>
-                    </div>
+        filtered.forEach(sub => {
+            const days = getDaysUntil(sub.nextPaymentDate);
+            const card = document.createElement('div');
+            card.className = 'sub-card glass-card';
+            card.innerHTML = `
+                <div class="sub-card-top">
+                    <span class="sub-badge-category"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i> ${escapeHtml(sub.category)}</span>
+                    <span class="badge ${days <= 3 && days >= 0 ? 'badge-warning' : days < 0 ? 'badge-danger' : 'badge-neutral'}">${days === 0 ? 'Dnes' : days > 0 ? `O ${days} dní` : 'Po splatnosti'}</span>
+                </div>
+                <div class="sub-card-title-group">
+                    <div class="sub-card-icon" style="background-color:${sub.color||'#6366f1'}"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i></div>
+                    <div><h3 class="sub-card-name">${escapeHtml(sub.name)}</h3><span class="sub-card-price-cycle">${sub.paymentMethod||'Platba'}</span></div>
+                </div>
+                <div style="margin-bottom:16px;"><span class="sub-card-price-tag">${formatMoney(sub.price)}</span><span class="sub-card-price-cycle">/${sub.billingCycle==='monthly'?'mesačne':'ročne'}</span></div>
+                <div class="sub-card-details">
+                    <div class="sub-detail-row"><span class="sub-detail-label">Ďalšia platba:</span><span class="sub-detail-value">${formatDateSK(sub.nextPaymentDate)}</span></div>
+                    <div class="sub-detail-row"><span class="sub-detail-label">Ročné náklady:</span><span class="sub-detail-value">${formatMoney(sub.billingCycle==='monthly'?sub.price*12:sub.price)}</span></div>
+                    ${sub.notes ? `<div class="sub-detail-row"><span class="sub-detail-label">Poznámka:</span><span class="sub-detail-value text-truncate" title="${escapeHtml(sub.notes)}">${escapeHtml(sub.notes)}</span></div>` : ''}
+                </div>
+                <div class="sub-card-actions">
+                    <button class="btn btn-secondary btn-sm edit-sub-btn" data-id="${sub.id}"><i class="fa-solid fa-pen"></i> Upraviť</button>
+                    <button class="btn btn-danger-outline btn-sm delete-sub-btn" data-id="${sub.id}"><i class="fa-solid fa-trash"></i> Zmazať</button>
+                </div>`;
+            container.appendChild(card);
+        });
 
-                    <div class="sub-card-title-group">
-                        <div class="sub-card-icon" style="background-color: ${sub.color || '#6366f1'}">
-                            <i class="fa-solid ${getCategoryIcon(sub.category)}"></i>
-                        </div>
-                        <div>
-                            <h3 class="sub-card-name">${escapeHtml(sub.name)}</h3>
-                            <span class="sub-card-price-cycle">${sub.paymentMethod || 'Platba'}</span>
-                        </div>
-                    </div>
-
-                    <div style="margin-bottom: 16px;">
-                        <span class="sub-card-price-tag">${formatMoney(sub.price)}</span>
-                        <span class="sub-card-price-cycle">/${sub.billingCycle === 'monthly' ? 'mesačne' : 'ročne'}</span>
-                    </div>
-
-                    <div class="sub-card-details">
-                        <div class="sub-detail-row">
-                            <span class="sub-detail-label">Ďalšia platba:</span>
-                            <span class="sub-detail-value">${formatDateSK(sub.nextPaymentDate)}</span>
-                        </div>
-                        <div class="sub-detail-row">
-                            <span class="sub-detail-label">Ročné náklady:</span>
-                            <span class="sub-detail-value">${formatMoney(sub.billingCycle === 'monthly' ? sub.price * 12 : sub.price)}</span>
-                        </div>
-                        ${sub.notes ? `
-                        <div class="sub-detail-row">
-                            <span class="sub-detail-label">Poznámka:</span>
-                            <span class="sub-detail-value text-truncate" title="${escapeHtml(sub.notes)}">${escapeHtml(sub.notes)}</span>
-                        </div>` : ''}
-                    </div>
-
-                    <div class="sub-card-actions">
-                        <button class="btn btn-secondary btn-sm edit-sub-btn" data-id="${sub.id}">
-                            <i class="fa-solid fa-pen"></i> Upraviť
-                        </button>
-                        <button class="btn btn-danger-outline btn-sm delete-sub-btn" data-id="${sub.id}">
-                            <i class="fa-solid fa-trash"></i> Zmazať
-                        </button>
-                    </div>
-                `;
-                container.appendChild(card);
-            });
-
-            document.querySelectorAll('.edit-sub-btn').forEach(btn => {
-                btn.addEventListener('click', () => openEditModal(btn.getAttribute('data-id')));
-            });
-
-            document.querySelectorAll('.delete-sub-btn').forEach(btn => {
-                btn.addEventListener('click', () => openDeleteModal(btn.getAttribute('data-id')));
-            });
-        }
+        document.querySelectorAll('.edit-sub-btn').forEach(btn => btn.addEventListener('click', () => openEditModal(btn.dataset.id)));
+        document.querySelectorAll('.delete-sub-btn').forEach(btn => btn.addEventListener('click', () => openDeleteModal(btn.dataset.id)));
     }
 
-    // 3. ADD SUBSCRIPTION FORM
+    // ============================================================
+    //  3. FORMULÁR PRIDANIE
+    // ============================================================
     const subscriptionForm = document.getElementById('subscriptionForm');
-    const cancelFormBtn = document.getElementById('cancelFormBtn');
     document.getElementById('subNextPaymentDate').value = getRelativeDate(30);
 
-    subscriptionForm.addEventListener('submit', async (e) => {
+    subscriptionForm.addEventListener('submit', async e => {
         e.preventDefault();
         const name = document.getElementById('subName').value.trim();
         const price = parseFloat(document.getElementById('subPrice').value);
@@ -618,52 +529,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const color = document.getElementById('subColor').value;
         const notes = document.getElementById('subNotes').value.trim();
 
-        if (!name || isNaN(price) || !nextPaymentDate) {
-            showToast('Prosím, vyplňte všetky povinné polia.', 'error');
-            return;
-        }
+        if (!name || isNaN(price) || !nextPaymentDate) { showToast('Prosím, vyplňte všetky povinné polia.', 'error'); return; }
 
-        const newSub = {
-            id: 'sub_' + Date.now(),
-            name,
-            price,
-            billingCycle,
-            category,
-            paymentMethod,
-            nextPaymentDate,
-            color,
-            notes,
-            active: true
-        };
-
-        await addSubscriptionAPI(newSub);
+        const newSub = { id: 'sub_' + Date.now(), name, price, billingCycle, category, paymentMethod, nextPaymentDate, color, notes, active: true };
+        await addSubscription(newSub);
         subscriptionForm.reset();
         document.getElementById('subNextPaymentDate').value = getRelativeDate(30);
-
-        showToast(`Predplatné "${name}" bolo uložené do súboru na disku!`, 'success');
+        showToast(`"${name}" uložené a synchronizované cez Supabase ☁️`, 'success');
         switchView('subscriptions');
     });
 
-    cancelFormBtn.addEventListener('click', () => {
-        subscriptionForm.reset();
-        switchView('subscriptions');
-    });
+    document.getElementById('cancelFormBtn').addEventListener('click', () => { subscriptionForm.reset(); switchView('subscriptions'); });
 
-    // 4. EDIT & DELETE MODALS
+    // ============================================================
+    //  4. EDIT & DELETE MODALS
+    // ============================================================
     const editModal = document.getElementById('editModal');
     const editForm = document.getElementById('editForm');
-    const closeEditModalBtn = document.getElementById('closeEditModalBtn');
-    const cancelEditBtn = document.getElementById('cancelEditBtn');
-
-    const deleteModal = document.getElementById('deleteModal');
-    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
-    const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
-    const closeDeleteModalBtn = document.getElementById('closeDeleteModalBtn');
+    document.getElementById('closeEditModalBtn').addEventListener('click', () => editModal.close());
+    document.getElementById('cancelEditBtn').addEventListener('click', () => editModal.close());
 
     function openEditModal(subId) {
         const sub = subscriptions.find(s => s.id === subId);
         if (!sub) return;
-
         document.getElementById('editSubId').value = sub.id;
         document.getElementById('editSubName').value = sub.name;
         document.getElementById('editSubPrice').value = sub.price;
@@ -673,21 +561,16 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('editSubNextPaymentDate').value = sub.nextPaymentDate;
         document.getElementById('editSubColor').value = sub.color || '#6366f1';
         document.getElementById('editSubNotes').value = sub.notes || '';
-
         editModal.showModal();
     }
 
-    closeEditModalBtn.addEventListener('click', () => editModal.close());
-    cancelEditBtn.addEventListener('click', () => editModal.close());
-
-    editForm.addEventListener('submit', async (e) => {
+    editForm.addEventListener('submit', async e => {
         e.preventDefault();
         const id = document.getElementById('editSubId').value;
-        const subIndex = subscriptions.findIndex(s => s.id === id);
-        if (subIndex === -1) return;
-
+        const existing = subscriptions.find(s => s.id === id);
+        if (!existing) return;
         const updated = {
-            ...subscriptions[subIndex],
+            ...existing,
             name: document.getElementById('editSubName').value.trim(),
             price: parseFloat(document.getElementById('editSubPrice').value),
             billingCycle: document.getElementById('editSubBillingCycle').value,
@@ -697,142 +580,93 @@ document.addEventListener('DOMContentLoaded', () => {
             color: document.getElementById('editSubColor').value,
             notes: document.getElementById('editSubNotes').value.trim()
         };
-
-        await updateSubscriptionAPI(updated);
+        await updateSubscription(updated);
         editModal.close();
-        showToast('Zmeny boli úspešne uložené na disk.', 'success');
+        showToast('Zmeny uložené a synchronizované cez Supabase ☁️', 'success');
     });
+
+    const deleteModal = document.getElementById('deleteModal');
+    document.getElementById('closeDeleteModalBtn').addEventListener('click', () => deleteModal.close());
+    document.getElementById('cancelDeleteBtn').addEventListener('click', () => deleteModal.close());
 
     function openDeleteModal(subId) {
         const sub = subscriptions.find(s => s.id === subId);
         if (!sub) return;
-
         deleteTargetId = subId;
         document.getElementById('deleteTargetName').textContent = sub.name;
         deleteModal.showModal();
     }
 
-    closeDeleteModalBtn.addEventListener('click', () => deleteModal.close());
-    cancelDeleteBtn.addEventListener('click', () => deleteModal.close());
-
-    confirmDeleteBtn.addEventListener('click', async () => {
+    document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
         if (!deleteTargetId) return;
-        await deleteSubscriptionAPI(deleteTargetId);
+        await deleteSubscription(deleteTargetId);
         deleteTargetId = null;
         deleteModal.close();
-        showToast('Predplatné bolo odstránené z diskového súboru.', 'info');
+        showToast('Predplatné odstránené zo Supabase ☁️', 'info');
     });
 
-    // 5. RENDER CALCULATOR ("ČO AK...")
-    const calcSelectAllBtn = document.getElementById('calcSelectAllBtn');
+    // ============================================================
+    //  5. KALKULAČKA ÚSPOR
+    // ============================================================
     let allCalcSelected = false;
-
-    calcSelectAllBtn.addEventListener('click', () => {
+    document.getElementById('calcSelectAllBtn').addEventListener('click', () => {
         allCalcSelected = !allCalcSelected;
-        if (allCalcSelected) {
-            subscriptions.forEach(s => selectedCalcSubIds.add(s.id));
-            calcSelectAllBtn.textContent = 'Odznačiť všetky';
-        } else {
-            selectedCalcSubIds.clear();
-            calcSelectAllBtn.textContent = 'Označiť všetky';
-        }
+        if (allCalcSelected) { subscriptions.forEach(s => selectedCalcSubIds.add(s.id)); document.getElementById('calcSelectAllBtn').textContent = 'Odznačiť všetky'; }
+        else { selectedCalcSubIds.clear(); document.getElementById('calcSelectAllBtn').textContent = 'Označiť všetky'; }
         renderCalculator();
     });
 
     function renderCalculator() {
         const container = document.getElementById('calcItemsContainer');
         container.innerHTML = '';
-
-        if (subscriptions.length === 0) {
-            container.innerHTML = `<p class="text-subtle" style="text-align: center;">Žiadne predplatné pre výpočet.</p>`;
-        } else {
-            subscriptions.forEach(sub => {
-                const isChecked = selectedCalcSubIds.has(sub.id);
-                const mPrice = sub.billingCycle === 'monthly' ? sub.price : sub.price / 12;
-
-                const item = document.createElement('div');
-                item.className = 'calc-item';
-                item.innerHTML = `
-                    <div class="calc-item-left">
-                        <input type="checkbox" class="calc-item-checkbox" ${isChecked ? 'checked' : ''} data-id="${sub.id}">
-                        <div class="calc-item-info">
-                            <strong>${escapeHtml(sub.name)}</strong>
-                            <span>${escapeHtml(sub.category)}</span>
-                        </div>
-                    </div>
-                    <div class="calc-item-price">${formatMoney(mPrice)}/mes.</div>
-                `;
-
-                item.addEventListener('click', (e) => {
-                    if (e.target.tagName !== 'INPUT') {
-                        const cb = item.querySelector('.calc-item-checkbox');
-                        cb.checked = !cb.checked;
-                    }
-                    const cb = item.querySelector('.calc-item-checkbox');
-                    if (cb.checked) selectedCalcSubIds.add(sub.id);
-                    else selectedCalcSubIds.delete(sub.id);
-                    updateSavingsCalculations();
-                });
-
-                container.appendChild(item);
+        if (!subscriptions.length) { container.innerHTML = `<p class="text-subtle" style="text-align:center;">Žiadne predplatné pre výpočet.</p>`; return; }
+        subscriptions.forEach(sub => {
+            const isChecked = selectedCalcSubIds.has(sub.id);
+            const mPrice = sub.billingCycle === 'monthly' ? sub.price : sub.price / 12;
+            const item = document.createElement('div');
+            item.className = 'calc-item';
+            item.innerHTML = `<div class="calc-item-left"><input type="checkbox" class="calc-item-checkbox" ${isChecked?'checked':''} data-id="${sub.id}"><div class="calc-item-info"><strong>${escapeHtml(sub.name)}</strong><span>${escapeHtml(sub.category)}</span></div></div><div class="calc-item-price">${formatMoney(mPrice)}/mes.</div>`;
+            item.addEventListener('click', e => {
+                if (e.target.tagName !== 'INPUT') item.querySelector('.calc-item-checkbox').checked = !item.querySelector('.calc-item-checkbox').checked;
+                const cb = item.querySelector('.calc-item-checkbox');
+                if (cb.checked) selectedCalcSubIds.add(sub.id); else selectedCalcSubIds.delete(sub.id);
+                updateSavingsCalculations();
             });
-        }
-
+            container.appendChild(item);
+        });
         updateSavingsCalculations();
     }
 
     function updateSavingsCalculations() {
-        let monthlySavings = 0;
-        let yearlySavings = 0;
-
+        let monthlySavings = 0, yearlySavings = 0;
         subscriptions.forEach(sub => {
             if (selectedCalcSubIds.has(sub.id)) {
-                const price = parseFloat(sub.price) || 0;
-                if (sub.billingCycle === 'monthly') {
-                    monthlySavings += price;
-                    yearlySavings += price * 12;
-                } else {
-                    monthlySavings += price / 12;
-                    yearlySavings += price;
-                }
+                monthlySavings += sub.billingCycle === 'monthly' ? sub.price : sub.price / 12;
+                yearlySavings += sub.billingCycle === 'monthly' ? sub.price * 12 : sub.price;
             }
         });
-
         document.getElementById('calcMonthlySavings').textContent = formatMoney(monthlySavings);
         document.getElementById('calcYearlySavings').textContent = formatMoney(yearlySavings);
 
         const targetsList = document.getElementById('calcTargetsList');
         targetsList.innerHTML = '';
-
-        const MILESTONES = [
-            { name: 'Kino pre dvoch + pukance', price: 30, icon: 'fa-film' },
-            { name: 'Ročné predplatné knižnej aplikácie', price: 80, icon: 'fa-book' },
-            { name: 'Kvalitné bezdrôtové slúchadlá', price: 150, icon: 'fa-headphones' },
-            { name: 'Víkendový wellness pobyt', price: 300, icon: 'fa-spa' },
-            { name: 'Nový smartfón strednej triedy', price: 600, icon: 'fa-mobile-screen' },
-            { name: 'Letná dovolenka pri mori', price: 1200, icon: 'fa-plane' }
-        ];
-
-        MILESTONES.forEach(m => {
+        [{ name: 'Kino pre dvoch + pukance', price: 30, icon: 'fa-film' }, { name: 'Ročné predplatné knižnej aplikácie', price: 80, icon: 'fa-book' }, { name: 'Kvalitné bezdrôtové slúchadlá', price: 150, icon: 'fa-headphones' }, { name: 'Víkendový wellness pobyt', price: 300, icon: 'fa-spa' }, { name: 'Nový smartfón strednej triedy', price: 600, icon: 'fa-mobile-screen' }, { name: 'Letná dovolenka pri mori', price: 1200, icon: 'fa-plane' }].forEach(m => {
             const isAchieved = yearlySavings >= m.price;
             const div = document.createElement('div');
             div.className = `target-item ${isAchieved ? 'achieved' : ''}`;
-            div.innerHTML = `
-                <i class="fa-solid ${m.icon} target-icon"></i>
-                <div class="target-text">${m.name} (${formatMoney(m.price)})</div>
-                <div class="target-status">${isAchieved ? '<i class="fa-solid fa-check-circle text-success"></i> Dosiahnuté!' : 'Chýba ' + formatMoney(m.price - yearlySavings)}</div>
-            `;
+            div.innerHTML = `<i class="fa-solid ${m.icon} target-icon"></i><div class="target-text">${m.name} (${formatMoney(m.price)})</div><div class="target-status">${isAchieved ? '<i class="fa-solid fa-check-circle text-success"></i> Dosiahnuté!' : 'Chýba ' + formatMoney(m.price - yearlySavings)}</div>`;
             targetsList.appendChild(div);
         });
     }
 
-    // 6. RENDER NOTIFICATIONS VIEW
-    const notifButtons = document.querySelectorAll('.days-filter-group button');
-    notifButtons.forEach(btn => {
+    // ============================================================
+    //  6. NOTIFIKÁCIE
+    // ============================================================
+    document.querySelectorAll('.days-filter-group button').forEach(btn => {
         btn.addEventListener('click', () => {
-            notifButtons.forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.days-filter-group button').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            notificationDaysFilter = parseInt(btn.getAttribute('data-days'));
+            notificationDaysFilter = parseInt(btn.dataset.days);
             renderNotifications();
         });
     });
@@ -841,149 +675,79 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('notificationsList');
         const badge = document.getElementById('navNotificationBadge');
         container.innerHTML = '';
+        const within7 = subscriptions.filter(s => { const d = getDaysUntil(s.nextPaymentDate); return d >= 0 && d <= 7; });
+        if (within7.length > 0) { badge.textContent = within7.length; badge.classList.remove('hidden'); } else { badge.classList.add('hidden'); }
 
-        const todayUpcoming = subscriptions.filter(sub => {
+        const filtered = subscriptions.filter(s => { const d = getDaysUntil(s.nextPaymentDate); return d >= 0 && d <= notificationDaysFilter; }).sort((a, b) => new Date(a.nextPaymentDate) - new Date(b.nextPaymentDate));
+        if (!filtered.length) { container.innerHTML = `<div class="empty-state"><i class="fa-regular fa-bell-slash"></i><h3>Žiadne platby v najbližších ${notificationDaysFilter} dňoch</h3><p>Všetky vaše platby sú v poriadku.</p></div>`; return; }
+
+        filtered.forEach(sub => {
             const days = getDaysUntil(sub.nextPaymentDate);
-            return days >= 0 && days <= 7;
+            const dayText = days === 0 ? 'Splatné dnes!' : days === 1 ? 'Splatné zajtra!' : `O ${days} dní (${formatDateSK(sub.nextPaymentDate)})`;
+            const badgeClass = days === 0 ? 'badge-danger' : days <= 3 ? 'badge-warning' : 'badge-neutral';
+            const div = document.createElement('div');
+            div.className = 'notif-item';
+            div.innerHTML = `<div class="notif-left"><div class="notif-icon-badge" style="background-color:${sub.color||'#6366f1'}"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i></div><div class="notif-info"><h4>${escapeHtml(sub.name)}</h4><p>${escapeHtml(sub.category)} • ${sub.paymentMethod||'Platba'}</p></div></div><div class="notif-right"><div class="notif-price">${formatMoney(sub.price)}</div><span class="badge ${badgeClass}">${dayText}</span></div>`;
+            container.appendChild(div);
         });
-
-        if (todayUpcoming.length > 0) {
-            badge.textContent = todayUpcoming.length;
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
-        }
-
-        const filtered = subscriptions.filter(sub => {
-            const days = getDaysUntil(sub.nextPaymentDate);
-            return days >= 0 && days <= notificationDaysFilter;
-        }).sort((a, b) => new Date(a.nextPaymentDate) - new Date(b.nextPaymentDate));
-
-        if (filtered.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <i class="fa-regular fa-bell-slash"></i>
-                    <h3>Žiadne platby v najbližších ${notificationDaysFilter} dňoch</h3>
-                    <p>Všetky vaše platby sú v poriadku.</p>
-                </div>
-            `;
-        } else {
-            filtered.forEach(sub => {
-                const days = getDaysUntil(sub.nextPaymentDate);
-                let dayText = '';
-                let badgeClass = 'badge-neutral';
-
-                if (days === 0) { dayText = 'Splatné dnes!'; badgeClass = 'badge-danger'; }
-                else if (days === 1) { dayText = 'Splatné zajtra!'; badgeClass = 'badge-warning'; }
-                else { dayText = `O ${days} dní (${formatDateSK(sub.nextPaymentDate)})`; }
-
-                const div = document.createElement('div');
-                div.className = 'notif-item';
-                div.innerHTML = `
-                    <div class="notif-left">
-                        <div class="notif-icon-badge" style="background-color: ${sub.color || '#6366f1'}">
-                            <i class="fa-solid ${getCategoryIcon(sub.category)}"></i>
-                        </div>
-                        <div class="notif-info">
-                            <h4>${escapeHtml(sub.name)}</h4>
-                            <p>${escapeHtml(sub.category)} • ${sub.paymentMethod || 'Platba'}</p>
-                        </div>
-                    </div>
-                    <div class="notif-right">
-                        <div class="notif-price">${formatMoney(sub.price)}</div>
-                        <span class="badge ${badgeClass}">${dayText}</span>
-                    </div>
-                `;
-                container.appendChild(div);
-            });
-        }
     }
 
-    // 7. EXPORT & BACKUP LOGIC
-    document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
-    document.getElementById('exportJsonBtn').addEventListener('click', exportJSON);
-    document.getElementById('importJsonInput').addEventListener('change', importJSON);
-    document.getElementById('resetDemoBtn').addEventListener('click', resetDemoData);
+    // ============================================================
+    //  7. EXPORT & IMPORT
+    // ============================================================
+    document.getElementById('exportCsvBtn').addEventListener('click', () => {
+        if (!subscriptions.length) { showToast('Nemáte žiadne dáta na export.', 'warning'); return; }
+        let csv = '\uFEFF' + 'Názov služby;Suma (€);Frekvencia;Kategória;Spôsob platby;Dátum platby;Poznámka\n';
+        subscriptions.forEach(s => { csv += `"${s.name}";"${s.price}";"${s.billingCycle==='monthly'?'Mesačne':'Ročne'}";"${s.category}";"${s.paymentMethod||''}";"${s.nextPaymentDate}";"${(s.notes||'').replace(/;/g,',')}"\n`; });
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+        const a = document.createElement('a');
+        a.href = url; a.download = `predplatne_export_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        showToast('CSV súbor bol stiahnutý!', 'success');
+    });
 
-    function exportCSV() {
-        if (subscriptions.length === 0) {
-            showToast('Nemáte žiadne dáta na export.', 'warning');
-            return;
-        }
+    document.getElementById('exportJsonBtn').addEventListener('click', () => {
+        const url = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(subscriptions, null, 2));
+        const a = document.createElement('a');
+        a.href = url; a.download = `predplatne_zaloha_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        showToast('JSON záloha bola stiahnutá!', 'success');
+    });
 
-        let csvContent = '\uFEFF';
-        csvContent += 'Názov služby;Suma (€);Frekvencia;Kategória;Spôsob platby;Dátum nasledujúcej platby;Poznámka\n';
-
-        subscriptions.forEach(sub => {
-            const freq = sub.billingCycle === 'monthly' ? 'Mesačne' : 'Ročne';
-            const notes = (sub.notes || '').replace(/;/g, ',');
-            csvContent += `"${sub.name}";"${sub.price}";"${freq}";"${sub.category}";"${sub.paymentMethod || ''}";"${sub.nextPaymentDate}";"${notes}"\n`;
-        });
-
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', `predplatne_export_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        showToast('CSV súbor bol úspešne stiahnutý!', 'success');
-    }
-
-    function exportJSON() {
-        const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(subscriptions, null, 2));
-        const link = document.createElement('a');
-        link.setAttribute('href', dataStr);
-        link.setAttribute('download', `predplatne_zaloha_${new Date().toISOString().split('T')[0]}.json`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        showToast('JSON záloha bola úspešne stiahnutá!', 'success');
-    }
-
-    async function importJSON(e) {
+    document.getElementById('importJsonInput').addEventListener('change', e => {
         const file = e.target.files[0];
         if (!file) return;
-
         const reader = new FileReader();
-        reader.onload = async function(evt) {
+        reader.onload = async evt => {
             try {
                 const parsed = JSON.parse(evt.target.result);
                 if (Array.isArray(parsed)) {
                     subscriptions = parsed;
-                    if (isServerConnected) {
-                        await fetch(`${API_BASE}/import`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(subscriptions)
-                        });
+                    syncToLocalStorage();
+                    if (storageMode === 'supabase') {
+                        await deleteAllFromSupabase();
+                        await bulkUpsertToSupabase(subscriptions);
                     }
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
                     updateAllViews();
-                    showToast('Dáta boli importované a uložené na disk!', 'success');
+                    showToast('Dáta importované a synchronizované cez Supabase ☁️', 'success');
                     switchView('dashboard');
-                } else {
-                    showToast('Neplatný formát JSON súboru.', 'error');
-                }
-            } catch (err) {
-                showToast('Chyba pri čítaní JSON súboru.', 'error');
-            }
+                } else showToast('Neplatný formát JSON súboru.', 'error');
+            } catch { showToast('Chyba pri čítaní JSON súboru.', 'error'); }
         };
         reader.readAsText(file);
-    }
+    });
 
-    async function resetDemoData() {
-        if (confirm('Naozaj chcete obnoviť ukážkové predplatné? Všetky vaše vlastné úpravy v súbore na disku budú nahradené.')) {
-            await resetDemoDataAPI();
-            showToast('Ukážkové dáta boli obnovené na disku.', 'info');
+    document.getElementById('resetDemoBtn').addEventListener('click', async () => {
+        if (confirm('Naozaj chcete obnoviť ukážkové predplatné? Všetky vaše dáta v Supabase budú nahradené.')) {
+            await resetToDemo();
+            showToast('Ukážkové dáta obnovené v Supabase ☁️', 'info');
             switchView('dashboard');
         }
-    }
+    });
 
-    // Category Helpers
+    // ============================================================
+    //  KATEGÓRIA HELPERS
+    // ============================================================
     function getCategoryIcon(cat) {
         switch (cat) {
             case 'Zábava': return 'fa-tv';
@@ -1006,40 +770,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function escapeHtml(text) {
-        if (!text) return '';
-        return text.replace(/[&<>"']/g, function(m) {
-            return {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            }[m];
-        });
-    }
-
+    // ============================================================
+    //  TOAST NOTIFIKÁCIE
+    // ============================================================
     function showToast(message, type = 'info') {
         const container = document.getElementById('toastContainer');
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
-
-        let icon = 'fa-info-circle';
-        if (type === 'success') icon = 'fa-check-circle';
-        if (type === 'warning') icon = 'fa-exclamation-circle';
-        if (type === 'error') icon = 'fa-circle-xmark';
-
-        toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${escapeHtml(message)}</span>`;
+        const icons = { success: 'fa-check-circle', info: 'fa-info-circle', warning: 'fa-exclamation-circle', error: 'fa-circle-xmark' };
+        toast.innerHTML = `<i class="fa-solid ${icons[type]||'fa-info-circle'}"></i> <span>${escapeHtml(message)}</span>`;
         container.appendChild(toast);
-
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateX(20px)';
-            setTimeout(() => toast.remove(), 300);
-        }, 3500);
+        setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(20px)'; setTimeout(() => toast.remove(), 300); }, 3500);
     }
 
-    // INITIALIZATION
-    loadData();
-    switchView('dashboard');
+    // ============================================================
+    //  ŠTART
+    // ============================================================
+    initData().then(() => {
+        subscribeToRealtime();
+        switchView('dashboard');
+    });
 });
