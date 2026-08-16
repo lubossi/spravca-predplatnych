@@ -11,7 +11,7 @@
 //  SUPABASE KONFIGURÁCIA
 // ============================================================
 const SUPABASE_URL = 'https://dhkxjrttoitqtecrsgzj.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoa3hqcnR0b2l0cXRlY3JzZ3pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3Mjc1MzcsImV4cCI6MjEwMjMwMzUzN30.8bSYvp7bqk_gGzQJ1cU6fjhTJoYMFEEHPlHcXvZA-G4';
+const SUPABASE_ANON_KEY = 'sb_publishable_khsufdcUdVGyugU6WvWJcw_kU5hHrDE';
 const TABLE = 'subscriptions';
 
 let supabase = null;
