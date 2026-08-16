@@ -1,17 +1,12 @@
 {
   "name": "spravca-predplatneho",
   "version": "1.0.0",
-  "description": "Aplikácia na správy pravidelných platieb s lokálnym ukladaním na disk",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "py": "python3 server.py",
-    "dev": "python3 server.py"
-  },
+  "description": "Aplikácia na správu pravidelných platieb so Supabase synchronizáciou",
   "keywords": [
     "subscription-manager",
     "dark-mode",
     "glassmorphism",
+    "supabase",
     "slovak"
   ],
   "author": "Antigravity",
