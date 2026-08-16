@@ -15,10 +15,15 @@ const SUPABASE_ANON_KEY = 'sb_publishable_khsufdcUdVGyugU6WvWJcw_kU5hHrDE';
 const TABLE = 'subscriptions';
 
 let supabase = null;
-try {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-} catch (e) {
-    console.warn('Supabase klient sa nepodarilo inicializovať:', e);
+function getSupabaseClient() {
+    if (!supabase && window.supabase) {
+        try {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } catch (e) {
+            console.warn('Supabase klient sa nepodarilo inicializovať:', e);
+        }
+    }
+    return supabase;
 }
 
 // ============================================================
@@ -131,9 +136,10 @@ document.addEventListener('DOMContentLoaded', () => {
     //  SUPABASE – CRUD OPERÁCIE
     // ============================================================
     async function loadFromSupabase() {
-        if (!supabase) return null;
+        const client = getSupabaseClient();
+        if (!client) return null;
         try {
-            const { data, error } = await supabase
+            const { data, error } = await client
                 .from(TABLE)
                 .select('*')
                 .order('next_payment_date', { ascending: true });
@@ -146,9 +152,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function addToSupabase(sub) {
-        if (!supabase) return false;
+        const client = getSupabaseClient();
+        if (!client) return false;
         try {
-            const { error } = await supabase.from(TABLE).insert(appToDB(sub));
+            const { error } = await client.from(TABLE).insert(appToDB(sub));
             if (error) throw error;
             return true;
         } catch (e) {
@@ -158,9 +165,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function updateInSupabase(sub) {
-        if (!supabase) return false;
+        const client = getSupabaseClient();
+        if (!client) return false;
         try {
-            const { error } = await supabase.from(TABLE).update(appToDB(sub)).eq('id', sub.id);
+            const { error } = await client.from(TABLE).update(appToDB(sub)).eq('id', sub.id);
             if (error) throw error;
             return true;
         } catch (e) {
@@ -170,9 +178,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function deleteFromSupabase(subId) {
-        if (!supabase) return false;
+        const client = getSupabaseClient();
+        if (!client) return false;
         try {
-            const { error } = await supabase.from(TABLE).delete().eq('id', subId);
+            const { error } = await client.from(TABLE).delete().eq('id', subId);
             if (error) throw error;
             return true;
         } catch (e) {
@@ -182,9 +191,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function bulkUpsertToSupabase(subs) {
-        if (!supabase) return false;
+        const client = getSupabaseClient();
+        if (!client) return false;
         try {
-            const { error } = await supabase.from(TABLE).upsert(subs.map(appToDB));
+            const { error } = await client.from(TABLE).upsert(subs.map(appToDB));
             if (error) throw error;
             return true;
         } catch (e) {
@@ -194,9 +204,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function deleteAllFromSupabase() {
-        if (!supabase) return false;
+        const client = getSupabaseClient();
+        if (!client) return false;
         try {
-            const { error } = await supabase.from(TABLE).delete().neq('id', '___none___');
+            const { error } = await client.from(TABLE).delete().neq('id', '___none___');
             if (error) throw error;
             return true;
         } catch (e) {
@@ -300,8 +311,9 @@ document.addEventListener('DOMContentLoaded', () => {
     //  REAL-TIME SYNC (Supabase Realtime)
     // ============================================================
     function subscribeToRealtime() {
-        if (!supabase || storageMode !== 'supabase') return;
-        supabase
+        const client = getSupabaseClient();
+        if (!client || storageMode !== 'supabase') return;
+        client
             .channel('subscriptions-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, async (payload) => {
                 // Obnoví dáta pri každej zmene z iného zariadenia
