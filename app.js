@@ -99,17 +99,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
     }
 
-    function appToDB(sub) {
+    function appToDB(sub, explicitUserId = null) {
+        const userId = explicitUserId || currentUser?.id || null;
         return {
-            id: sub.id,
-            name: sub.name,
-            price: sub.price,
-            billing_cycle: sub.billingCycle,
-            category: sub.category,
-            payment_method: sub.paymentMethod,
-            next_payment_date: sub.nextPaymentDate,
-            color: sub.color || '#6366f1',
-            notes: sub.notes || '',
+            id: String(sub.id || ('sub_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6))),
+            user_id: userId,
+            name: String(sub.name || 'Neznáma služba').trim(),
+            price: parseFloat(sub.price) || 0,
+            billing_cycle: (sub.billing_cycle === 'yearly' || sub.billingCycle === 'yearly') ? 'yearly' : 'monthly',
+            category: String(sub.category || 'Iné').trim(),
+            payment_method: String(sub.payment_method || sub.paymentMethod || 'Platebná karta').trim(),
+            next_payment_date: String(sub.next_payment_date || sub.nextPaymentDate || getRelativeDate(30)),
+            color: String(sub.color || '#6366f1'),
+            notes: String(sub.notes || '').trim(),
             active: sub.active !== false
         };
     }
@@ -341,7 +343,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!Array.isArray(data)) return [];
             return data.map(dbToApp).filter(Boolean);
         } catch (e) {
-            console.warn('Supabase načítanie zlyhalo:', e.message || e);
+            console.error('Supabase načítanie zlyhalo:', e.message || e);
             return null;
         }
     }
@@ -350,12 +352,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const client = getSupabaseClient();
         if (!client || !currentUser) return false;
         try {
-            const payload = { ...appToDB(sub), user_id: currentUser.id };
+            const payload = appToDB(sub, currentUser.id);
             const { error } = await client.from(TABLE).insert(payload);
             if (error) throw error;
             return true;
         } catch (e) {
-            console.warn('Supabase insert zlyhalo:', e.message || e);
+            console.error('Supabase insert zlyhalo:', e.message || e);
+            showToast('Chyba Supabase: ' + (e.message || e), 'error');
             return false;
         }
     }
@@ -364,12 +367,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const client = getSupabaseClient();
         if (!client || !currentUser) return false;
         try {
-            const payload = { ...appToDB(sub), user_id: currentUser.id };
+            const payload = appToDB(sub, currentUser.id);
             const { error } = await client.from(TABLE).update(payload).eq('id', sub.id).eq('user_id', currentUser.id);
             if (error) throw error;
             return true;
         } catch (e) {
-            console.warn('Supabase update zlyhalo:', e.message || e);
+            console.error('Supabase update zlyhalo:', e.message || e);
+            showToast('Chyba Supabase: ' + (e.message || e), 'error');
             return false;
         }
     }
@@ -382,35 +386,42 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (error) throw error;
             return true;
         } catch (e) {
-            console.warn('Supabase delete zlyhalo:', e.message || e);
+            console.error('Supabase delete zlyhalo:', e.message || e);
+            showToast('Chyba Supabase: ' + (e.message || e), 'error');
             return false;
         }
     }
 
-    async function bulkUpsertToSupabase(subs) {
+    async function bulkUpsertToSupabase(subs, explicitUserId = null) {
         const client = getSupabaseClient();
-        if (!client || !currentUser) return false;
+        const userId = explicitUserId || currentUser?.id;
+        if (!client || !userId) {
+            return { success: false, error: new Error('Používateľ nie je prihlásený') };
+        }
         try {
-            const payload = subs.map(s => ({ ...appToDB(s), user_id: currentUser.id }));
-            const { error } = await client.from(TABLE).upsert(payload);
+            const payload = subs.map(s => appToDB(s, userId));
+            const { error } = await client.from(TABLE).upsert(payload, { onConflict: 'id' });
             if (error) throw error;
-            return true;
+            return { success: true };
         } catch (e) {
-            console.warn('Supabase upsert zlyhalo:', e.message || e);
-            return false;
+            console.error('Supabase upsert zlyhalo:', e);
+            return { success: false, error: e };
         }
     }
 
-    async function deleteAllFromSupabase() {
+    async function deleteAllFromSupabase(explicitUserId = null) {
         const client = getSupabaseClient();
-        if (!client || !currentUser) return false;
+        const userId = explicitUserId || currentUser?.id;
+        if (!client || !userId) {
+            return { success: false, error: new Error('Používateľ nie je prihlásený') };
+        }
         try {
-            const { error } = await client.from(TABLE).delete().eq('user_id', currentUser.id);
+            const { error } = await client.from(TABLE).delete().eq('user_id', userId);
             if (error) throw error;
-            return true;
+            return { success: true };
         } catch (e) {
-            console.warn('Supabase delete all zlyhalo:', e.message || e);
-            return false;
+            console.error('Supabase delete all zlyhalo:', e);
+            return { success: false, error: e };
         }
     }
 
@@ -988,13 +999,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         showToast('JSON záloha bola stiahnutá!', 'success');
     });
 
-    document.getElementById('importJsonInput')?.addEventListener('change', e => {
+    document.getElementById('importJsonInput')?.addEventListener('change', async e => {
         const file = e.target.files[0];
         if (!file) return;
 
-        if (!currentUser) {
-            showToast('Pre import zo zálohy sa najskôr prihláste.', 'warning');
-            openAuthModal('login');
+        const client = getSupabaseClient();
+        if (!client) {
+            showToast('Chyba: Supabase klient nie je inicializovaný.', 'error');
+            e.target.value = '';
+            return;
+        }
+
+        // 1. Získaj aktuálne overeného používateľa cez getUser()
+        let activeUser = null;
+        try {
+            const { data: userData, error: userError } = await client.auth.getUser();
+            if (userError || !userData?.user) {
+                showToast('Pre import zo zálohy sa musíte prihlásiť.', 'warning');
+                openAuthModal('login');
+                e.target.value = '';
+                return;
+            }
+            activeUser = userData.user;
+            currentUser = activeUser;
+        } catch (err) {
+            console.error('Chyba overenia používateľa:', err);
+            showToast('Chyba pri overovaní používateľa: ' + (err.message || err), 'error');
             e.target.value = '';
             return;
         }
@@ -1003,41 +1033,47 @@ document.addEventListener('DOMContentLoaded', async () => {
         reader.onload = async evt => {
             try {
                 const parsed = JSON.parse(evt.target.result);
-                if (Array.isArray(parsed)) {
-                    // 1. Sanitizácia a namapovanie každého záznamu
-                    const cleanItems = parsed.map(item => ({
-                        id: String(item.id || ('sub_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5))),
-                        name: String(item.name || 'Neznáma služba'),
-                        price: parseFloat(item.price) || 0,
-                        billingCycle: String(item.billingCycle || item.billing_cycle || 'monthly'),
-                        category: String(item.category || 'Iné'),
-                        paymentMethod: String(item.paymentMethod || item.payment_method || 'Platebná karta'),
-                        nextPaymentDate: String(item.nextPaymentDate || item.next_payment_date || getRelativeDate(30)),
-                        color: String(item.color || '#6366f1'),
-                        notes: String(item.notes || ''),
-                        active: item.active !== false
-                    }));
-
-                    // 2. Najprv vymaž staré záznamy prihláseného používateľa v Supabase
-                    await deleteAllFromSupabase();
-
-                    // 3. Vlož nové záznamy s priradeným user_id
-                    const ok = await bulkUpsertToSupabase(cleanItems);
-                    if (ok) {
-                        subscriptions = cleanItems;
-                        syncToLocalStorage();
-                        updateAllViews();
-                        showToast(`Úspešne obnovených ${cleanItems.length} predplatných zo zálohy ☁️`, 'success');
-                        switchView('dashboard');
-                    } else {
-                        showToast('Chyba pri ukladaní importovaných údajov do Supabase.', 'error');
-                    }
-                } else {
-                    showToast('Neplatný formát JSON súboru (očakáva sa pole predplatných).', 'error');
+                if (!Array.isArray(parsed) || parsed.length === 0) {
+                    showToast('Neplatný alebo prázdny formát JSON súboru (očakáva sa pole predplatných).', 'error');
+                    return;
                 }
+
+                // 2. Mapovanie stĺpcov (appToDB) s explicitným priradením user_id
+                const pripraveneData = parsed.map(item => appToDB(item, activeUser.id));
+
+                // 3. Najprv vymaž staré záznamy používateľa v Supabase
+                const delRes = await deleteAllFromSupabase(activeUser.id);
+                if (!delRes.success) {
+                    const errMsg = delRes.error?.message || 'Neznáma chyba pri mazaní starých dát';
+                    console.error('Chyba pri mazaní starých dát pred importom:', delRes.error);
+                    showToast(`Chyba pri príprave databázy: ${errMsg}`, 'error');
+                    return;
+                }
+
+                // 4. Bezpečný zápis do Supabase cez upsert s { onConflict: 'id' }
+                const { error: upsertError } = await client
+                    .from(TABLE)
+                    .upsert(pripraveneData, { onConflict: 'id' });
+
+                if (upsertError) {
+                    console.error('Supabase upsert import error:', upsertError);
+                    showToast(`Chyba pri importe do Supabase: ${upsertError.message || JSON.stringify(upsertError)}`, 'error');
+                    return;
+                }
+
+                // 5. Úspešná synchronizácia do lokálneho stavu a UI
+                subscriptions = pripraveneData.map(dbToApp).filter(Boolean);
+                storageMode = 'supabase';
+                syncToLocalStorage();
+                updateStorageStatusBadge();
+                updateUserProfileUI();
+                updateAllViews();
+                showToast(`Úspešne importovaných a synchronizovaných ${subscriptions.length} predplatných ☁️`, 'success');
+                switchView('dashboard');
+
             } catch (err) {
                 console.error('Import JSON error:', err);
-                showToast('Chyba pri čítaní alebo spracovaní JSON súboru.', 'error');
+                showToast(`Chyba pri čítaní JSON súboru: ${err.message || err}`, 'error');
             } finally {
                 e.target.value = '';
             }
@@ -1093,7 +1129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const icons = { success: 'fa-check-circle', info: 'fa-info-circle', warning: 'fa-exclamation-circle', error: 'fa-circle-xmark' };
         toast.innerHTML = `<i class="fa-solid ${icons[type]||'fa-info-circle'}"></i> <span>${escapeHtml(message)}</span>`;
         container.appendChild(toast);
-        setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(20px)'; setTimeout(() => toast.remove(), 300); }, 3500);
+        setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(20px)'; setTimeout(() => toast.remove(), 300); }, 4000);
     }
 
     // ============================================================
