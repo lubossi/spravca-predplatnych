@@ -406,12 +406,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             return { success: false, error: new Error('Používateľ nie je prihlásený') };
         }
         try {
-            const payload = subs.map(s => appToDB(s, userId));
-            const { error } = await client.from(TABLE).upsert(payload, { onConflict: 'id' });
+            const payload = subs.map(s => ({ ...appToDB(s, userId), id: generateId() }));
+            const { error } = await client.from(TABLE).insert(payload);
             if (error) throw error;
             return { success: true };
         } catch (e) {
-            console.error('Supabase upsert zlyhalo:', e);
+            console.error('Supabase bulk insert zlyhalo:', e);
             return { success: false, error: e };
         }
     }
@@ -1045,18 +1045,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                     id: generateId()
                 }));
 
-                // 3. Bezpečný zápis cez upsert s { onConflict: 'id' }
-                const { error: upsertError } = await client
-                    .from(TABLE)
-                    .upsert(rowsToInsert, { onConflict: 'id' });
+                // 3. Voliteľné prečistenie starých záznamov používateľa
+                await client.from(TABLE).delete().eq('user_id', user.id);
 
-                if (upsertError) {
-                    console.error('Chyba pri upsert do Supabase:', upsertError);
-                    showToast(`Chyba pri importe do Supabase: ${upsertError.message || JSON.stringify(upsertError)}`, 'error');
+                // 4. Bezpečný zápis cez čistý INSERT (vyhodnocuje len WITH CHECK, bez chyby USING expression)
+                const { error: insertError } = await client
+                    .from(TABLE)
+                    .insert(rowsToInsert);
+
+                if (insertError) {
+                    console.error('Chyba pri insert do Supabase:', insertError);
+                    showToast(`Chyba pri importe do Supabase: ${insertError.message || JSON.stringify(insertError)}`, 'error');
                     return;
                 }
 
-                // 4. Okamžitá obnova stavu UI priamo z databázy
+                // 5. Okamžitá obnova stavu UI priamo z databázy
                 await initData();
                 showToast(`Úspešne importovaných ${subscriptions.length} predplatných ☁️`, 'success');
                 switchView('dashboard');
