@@ -1039,8 +1039,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return;
                 }
 
-                // 2. Mapovanie položiek zo zálohy s explicitným priradením user_id a overením ID
-                const rowsToInsert = parsed.map(item => appToDB(item, user.id));
+                // 2. Mapovanie položiek zo zálohy s priradením user_id a generovaním nového unikátneho UUID
+                const rowsToInsert = parsed.map(item => ({
+                    ...appToDB(item, user.id),
+                    id: generateId()
+                }));
 
                 // 3. Bezpečný zápis cez upsert s { onConflict: 'id' }
                 const { error: upsertError } = await client
