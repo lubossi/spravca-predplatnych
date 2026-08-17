@@ -1,10 +1,6 @@
 /**
  * SPRÁVCA PREDPLATNÝCH (Subscription Manager)
  * Supabase Cloud Storage Edition – synchronizácia medzi všetkými zariadeniami
- *
- * Priorita ukladania:
- *   1. Supabase (online) – zdieľané medzi Macom, Windowsom, mobilom
- *   2. LocalStorage (offline fallback) – keď nie je internet
  */
 
 // ============================================================
@@ -14,16 +10,16 @@ const SUPABASE_URL = 'https://dhkxjrttoitqtecrsgzj.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoa3hqcnR0b2l0cXRlY3JzZ3pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3Mjc1MzcsImV4cCI6MjEwMjMwMzUzN30.8bSYvp7bqk_gGzQJ1cU6fjhTJoYMFEEHPlHcXvZA-G4';
 const TABLE = 'subscriptions';
 
-let supabase = null;
+let _supabaseClient = null;
 function getSupabaseClient() {
-    if (!supabase && window.supabase) {
+    if (!_supabaseClient && window.supabase && typeof window.supabase.createClient === 'function') {
         try {
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            _supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         } catch (e) {
-            console.warn('Supabase klient sa nepodarilo inicializovať:', e);
+            console.error('Chyba inicializácie Supabase klienta:', e);
         }
     }
-    return supabase;
+    return _supabaseClient;
 }
 
 // ============================================================
@@ -70,6 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getDaysUntil(dateString) {
+        if (!dateString) return 999;
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const target = new Date(dateString);
@@ -79,21 +76,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function escapeHtml(text) {
         if (!text) return '';
-        return text.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
+        return String(text).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
     }
 
-    // Konverzia z DB snake_case do JS camelCase
+    // Bezpečná konverzia z DB snake_case do JS camelCase
     function dbToApp(row) {
+        if (!row) return null;
         return {
-            id: row.id,
-            name: row.name,
-            price: parseFloat(row.price),
-            billingCycle: row.billing_cycle,
-            category: row.category,
-            paymentMethod: row.payment_method || 'Platebná karta',
-            nextPaymentDate: row.next_payment_date,
-            color: row.color || '#6366f1',
-            notes: row.notes || '',
+            id: String(row.id || ('sub_' + Date.now() + Math.random().toString(36).substr(2, 4))),
+            name: String(row.name || 'Neznáma služba'),
+            price: parseFloat(row.price) || 0,
+            billingCycle: String(row.billing_cycle || row.billingCycle || 'monthly'),
+            category: String(row.category || 'Iné'),
+            paymentMethod: String(row.payment_method || row.paymentMethod || 'Platebná karta'),
+            nextPaymentDate: String(row.next_payment_date || row.nextPaymentDate || getRelativeDate(30)),
+            color: String(row.color || '#6366f1'),
+            notes: String(row.notes || ''),
             active: row.active !== false
         };
     }
@@ -108,7 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
             category: sub.category,
             payment_method: sub.paymentMethod,
             next_payment_date: sub.nextPaymentDate,
-            color: sub.color,
+            color: sub.color || '#6366f1',
             notes: sub.notes || '',
             active: sub.active !== false
         };
@@ -128,7 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
             badge.innerHTML = `<i class="fa-solid fa-database"></i> Offline (LocalStorage)`;
         } else {
             badge.classList.add('offline');
-            badge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Pripájam sa...`;
+            badge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Pripájam k Supabase...`;
         }
     }
 
@@ -137,16 +135,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     async function loadFromSupabase() {
         const client = getSupabaseClient();
-        if (!client) return null;
+        if (!client) {
+            console.warn('Supabase klient nie je inicializovaný');
+            return null;
+        }
         try {
             const { data, error } = await client
                 .from(TABLE)
-                .select('*')
-                .order('next_payment_date', { ascending: true });
+                .select('*');
             if (error) throw error;
-            return data.map(dbToApp);
+            if (!Array.isArray(data)) return [];
+            return data.map(dbToApp).filter(Boolean);
         } catch (e) {
-            console.warn('Supabase načítanie zlyhalo:', e.message);
+            console.warn('Supabase načítanie zlyhalo:', e.message || e);
             return null;
         }
     }
@@ -159,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (error) throw error;
             return true;
         } catch (e) {
-            console.warn('Supabase insert zlyhalo:', e.message);
+            console.warn('Supabase insert zlyhalo:', e.message || e);
             return false;
         }
     }
@@ -172,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (error) throw error;
             return true;
         } catch (e) {
-            console.warn('Supabase update zlyhalo:', e.message);
+            console.warn('Supabase update zlyhalo:', e.message || e);
             return false;
         }
     }
@@ -185,7 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (error) throw error;
             return true;
         } catch (e) {
-            console.warn('Supabase delete zlyhalo:', e.message);
+            console.warn('Supabase delete zlyhalo:', e.message || e);
             return false;
         }
     }
@@ -198,7 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (error) throw error;
             return true;
         } catch (e) {
-            console.warn('Supabase upsert zlyhalo:', e.message);
+            console.warn('Supabase upsert zlyhalo:', e.message || e);
             return false;
         }
     }
@@ -211,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (error) throw error;
             return true;
         } catch (e) {
-            console.warn('Supabase delete all zlyhalo:', e.message);
+            console.warn('Supabase delete all zlyhalo:', e.message || e);
             return false;
         }
     }
@@ -223,28 +224,20 @@ document.addEventListener('DOMContentLoaded', () => {
         storageMode = 'loading';
         updateStorageStatusBadge();
 
-        // Pokús sa načítať zo Supabase
         const cloudData = await loadFromSupabase();
 
         if (cloudData !== null) {
             storageMode = 'supabase';
             if (cloudData.length === 0) {
-                // Prvé spustenie – nahraj demo dáta do Supabase
                 const ok = await bulkUpsertToSupabase(DEMO_SUBSCRIPTIONS);
-                if (ok) {
-                    subscriptions = [...DEMO_SUBSCRIPTIONS];
-                    showToast('Pripojené na Supabase! Demo predplatné boli vytvorené.', 'success');
-                }
+                subscriptions = ok ? [...DEMO_SUBSCRIPTIONS] : [...DEMO_SUBSCRIPTIONS];
             } else {
                 subscriptions = cloudData;
-                // Synchronizuj LocalStorage ako zálohu
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
-                showToast('Predplatné načítané zo Supabase ☁️', 'info');
             }
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
+            showToast('Synchronizované cez Supabase ☁️', 'success');
         } else {
-            // Offline fallback – LocalStorage
             storageMode = 'localStorage';
-            showToast('Supabase nedostupné – používam offline zálohu.', 'warning');
             const raw = localStorage.getItem(STORAGE_KEY);
             if (raw) {
                 try { subscriptions = JSON.parse(raw); }
@@ -253,6 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 subscriptions = [...DEMO_SUBSCRIPTIONS];
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
             }
+            showToast('Offline režim: Používam lokálne dáta.', 'warning');
         }
 
         updateStorageStatusBadge();
@@ -264,7 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============================================================
-    //  CRUD OBÁLKY – Supabase + LocalStorage záloha
+    //  CRUD OBÁLKY
     // ============================================================
     async function addSubscription(newSub) {
         subscriptions.push(newSub);
@@ -272,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAllViews();
         if (storageMode === 'supabase') {
             const ok = await addToSupabase(newSub);
-            if (!ok) showToast('Predplatné uložené lokálne, Supabase sync zlyhal.', 'warning');
+            if (!ok) showToast('Predplatné uložené lokálne, sync so Supabase zlyhal.', 'warning');
         }
     }
 
@@ -283,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAllViews();
         if (storageMode === 'supabase') {
             const ok = await updateInSupabase(updatedSub);
-            if (!ok) showToast('Zmeny uložené lokálne, Supabase sync zlyhal.', 'warning');
+            if (!ok) showToast('Zmeny uložené lokálne, sync so Supabase zlyhal.', 'warning');
         }
     }
 
@@ -293,7 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAllViews();
         if (storageMode === 'supabase') {
             const ok = await deleteFromSupabase(subId);
-            if (!ok) showToast('Zmazané lokálne, Supabase sync zlyhal.', 'warning');
+            if (!ok) showToast('Zmazané lokálne, sync so Supabase zlyhal.', 'warning');
         }
     }
 
@@ -308,24 +302,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============================================================
-    //  REAL-TIME SYNC (Supabase Realtime)
+    //  REAL-TIME SYNC
     // ============================================================
     function subscribeToRealtime() {
         const client = getSupabaseClient();
         if (!client || storageMode !== 'supabase') return;
-        client
-            .channel('subscriptions-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, async (payload) => {
-                // Obnoví dáta pri každej zmene z iného zariadenia
-                const freshData = await loadFromSupabase();
-                if (freshData !== null) {
-                    subscriptions = freshData;
-                    syncToLocalStorage();
-                    updateAllViews();
-                    showToast('Dáta synchronizované z iného zariadenia ☁️', 'info');
-                }
-            })
-            .subscribe();
+        try {
+            client
+                .channel('subscriptions-changes')
+                .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, async () => {
+                    const freshData = await loadFromSupabase();
+                    if (freshData !== null) {
+                        subscriptions = freshData;
+                        syncToLocalStorage();
+                        updateAllViews();
+                        showToast('Dáta synchronizované z iného zariadenia ☁️', 'info');
+                    }
+                })
+                .subscribe();
+        } catch (e) {
+            console.warn('Realtime subscription error:', e);
+        }
     }
 
     // ============================================================
