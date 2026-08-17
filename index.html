@@ -88,6 +88,20 @@
             </nav>
 
             <div class="sidebar-footer">
+                <div class="sidebar-user-section hidden" id="sidebarUserSection">
+                    <div class="sidebar-user-info">
+                        <i class="fa-solid fa-circle-user"></i>
+                        <span class="sidebar-user-email text-truncate" id="sidebarUserEmail">pouzivatel@email.sk</span>
+                    </div>
+                    <button type="button" class="btn btn-outline btn-xs btn-full" id="sidebarLogoutBtn">
+                        <i class="fa-solid fa-right-from-bracket"></i> Odhlásiť sa
+                    </button>
+                </div>
+                <div class="sidebar-login-section" id="sidebarLoginSection">
+                    <button type="button" class="btn btn-outline btn-sm btn-full" id="sidebarLoginBtn">
+                        <i class="fa-solid fa-right-to-bracket"></i> Prihlásiť sa
+                    </button>
+                </div>
                 <div class="mini-summary">
                     <span class="mini-summary-label">Mesačné výdavky</span>
                     <strong class="mini-summary-value" id="sidebarMonthlyTotal">0,00 €</strong>
@@ -110,6 +124,18 @@
                 </div>
 
                 <div class="header-actions">
+                    <div class="user-auth-badge hidden" id="userAuthBadge">
+                        <i class="fa-solid fa-user-circle"></i>
+                        <span class="user-email-text text-truncate" id="userEmailText">pouzivatel@email.sk</span>
+                        <button type="button" class="btn btn-outline btn-xs logout-btn" id="logoutBtn" title="Odhlásiť sa">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                            <span class="btn-text">Odhlásiť</span>
+                        </button>
+                    </div>
+                    <button type="button" class="btn btn-outline btn-sm login-btn" id="loginBtn">
+                        <i class="fa-solid fa-right-to-bracket"></i>
+                        <span>Prihlásiť</span>
+                    </button>
                     <button class="btn btn-primary btn-sm" id="quickAddBtn">
                         <i class="fa-solid fa-plus"></i>
                         <span>Nové predplatné</span>
@@ -561,6 +587,50 @@
         </div>
     </dialog>
 
+    <!-- MODAL DIALOG: AUTH (LOGIN & REGISTER) -->
+    <dialog class="modal-dialog glass-modal" id="authModal">
+        <div class="modal-content auth-modal-content">
+            <div class="modal-header">
+                <div class="auth-header-title">
+                    <div class="logo-icon small"><i class="fa-solid fa-wallet"></i></div>
+                    <h3 id="authModalTitle">Prihlásenie do účtu</h3>
+                </div>
+                <button type="button" class="close-modal-btn" id="closeAuthModalBtn" aria-label="Zatvoriť"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="auth-tabs">
+                <button type="button" class="auth-tab active" id="tabLoginBtn">Prihlásenie</button>
+                <button type="button" class="auth-tab" id="tabRegisterBtn">Registrácia</button>
+            </div>
+
+            <div class="auth-alert hidden" id="authAlert"></div>
+
+            <form id="authForm" class="app-form auth-form">
+                <div class="form-group full-width">
+                    <label for="authEmail">E-mailová adresa *</label>
+                    <input type="email" id="authEmail" class="form-control" placeholder="vas@email.sk" required autocomplete="email">
+                </div>
+
+                <div class="form-group full-width">
+                    <label for="authPassword">Heslo *</label>
+                    <input type="password" id="authPassword" class="form-control" placeholder="••••••••" required minlength="6" autocomplete="current-password">
+                    <small class="text-subtle" id="passwordHint" style="display:none; font-size:12px; margin-top:4px;">Minimálne 6 znakov</small>
+                </div>
+
+                <div class="form-actions auth-actions">
+                    <button type="submit" class="btn btn-primary btn-full" id="authSubmitBtn">
+                        <i class="fa-solid fa-right-to-bracket"></i> <span id="authSubmitText">Prihlásiť sa</span>
+                    </button>
+                </div>
+            </form>
+
+            <div class="auth-footer-switch">
+                <span id="authSwitchText">Ešte nemáte účet?</span>
+                <button type="button" class="btn-link" id="authSwitchBtn">Vytvorte si ho tu</button>
+            </div>
+        </div>
+    </dialog>
+
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div class="toast-container" id="toastContainer"></div>
 
@@ -592,6 +662,6 @@
     </nav>
 
     <!-- Application Script -->
-    <script src="app.js?v=20260817-6"></script>
+    <script src="app.js?v=20260817-7"></script>
 </body>
 </html>

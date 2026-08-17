@@ -1,6 +1,7 @@
 /**
  * SPRÁVCA PREDPLATNÝCH (Subscription Manager)
- * Supabase Cloud Storage Edition – synchronizácia medzi všetkými zariadeniami
+ * Supabase Auth & Cloud Storage Edition
+ * Synchronizácia medzi zariadeniami s e-mailovou autentifikáciou a RLS
  */
 
 // ============================================================
@@ -25,14 +26,17 @@ function getSupabaseClient() {
 // ============================================================
 //  HLAVNÁ LOGIKA APLIKÁCIE
 // ============================================================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // ——— App State ———
     let subscriptions = [];
+    let currentUser = null;
     let currentView = 'dashboard';
     let deleteTargetId = null;
     let notificationDaysFilter = 7;
     let selectedCalcSubIds = new Set();
-    let storageMode = 'loading'; // 'supabase' | 'localStorage' | 'loading'
+    let storageMode = 'loading'; // 'supabase' | 'localStorage' | 'unauthenticated' | 'loading'
+    let authMode = 'login'; // 'login' | 'register'
+    let realtimeChannel = null;
 
     const STORAGE_KEY = 'spravca_predplatnych_data';
 
@@ -79,7 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return String(text).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
     }
 
-    // Bezpečná konverzia z DB snake_case do JS camelCase
     function dbToApp(row) {
         if (!row) return null;
         return {
@@ -96,7 +99,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // Konverzia z JS camelCase do DB snake_case
     function appToDB(sub) {
         return {
             id: sub.id,
@@ -113,7 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============================================================
-    //  STORAGE STATUS BADGE
+    //  STORAGE STATUS BADGE & USER PROFILE UI
     // ============================================================
     function updateStorageStatusBadge() {
         const badge = document.getElementById('storageStatusBadge');
@@ -121,28 +123,198 @@ document.addEventListener('DOMContentLoaded', () => {
         if (storageMode === 'supabase') {
             badge.classList.remove('offline');
             badge.innerHTML = `<i class="fa-solid fa-cloud"></i> Synchronizované cez Supabase`;
+        } else if (storageMode === 'unauthenticated') {
+            badge.classList.add('offline');
+            badge.innerHTML = `<i class="fa-solid fa-user-lock"></i> Neprihlásený (Kliknite pre prihlásenie)`;
         } else if (storageMode === 'localStorage') {
             badge.classList.add('offline');
-            badge.innerHTML = `<i class="fa-solid fa-database"></i> Offline (LocalStorage)`;
+            badge.innerHTML = `<i class="fa-solid fa-database"></i> Offline režim`;
         } else {
             badge.classList.add('offline');
             badge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Pripájam k Supabase...`;
         }
     }
 
+    document.getElementById('storageStatusBadge')?.addEventListener('click', () => {
+        if (!currentUser) openAuthModal('login');
+    });
+
+    function updateUserProfileUI() {
+        const userAuthBadge = document.getElementById('userAuthBadge');
+        const userEmailText = document.getElementById('userEmailText');
+        const loginBtn = document.getElementById('loginBtn');
+        const sidebarUserSection = document.getElementById('sidebarUserSection');
+        const sidebarUserEmail = document.getElementById('sidebarUserEmail');
+        const sidebarLoginSection = document.getElementById('sidebarLoginSection');
+
+        if (currentUser) {
+            const email = currentUser.email || 'Prihlásený používateľ';
+            if (userAuthBadge) userAuthBadge.classList.remove('hidden');
+            if (userEmailText) userEmailText.textContent = email;
+            if (loginBtn) loginBtn.classList.add('hidden');
+            if (sidebarUserSection) sidebarUserSection.classList.remove('hidden');
+            if (sidebarUserEmail) sidebarUserEmail.textContent = email;
+            if (sidebarLoginSection) sidebarLoginSection.classList.add('hidden');
+        } else {
+            if (userAuthBadge) userAuthBadge.classList.add('hidden');
+            if (loginBtn) loginBtn.classList.remove('hidden');
+            if (sidebarUserSection) sidebarUserSection.classList.add('hidden');
+            if (sidebarLoginSection) sidebarLoginSection.classList.remove('hidden');
+        }
+    }
+
     // ============================================================
-    //  SUPABASE – CRUD OPERÁCIE
+    //  SUPABASE AUTH MODAL & AUTHENTICATION
+    // ============================================================
+    const authModal = document.getElementById('authModal');
+    const authForm = document.getElementById('authForm');
+    const authAlert = document.getElementById('authAlert');
+    const tabLoginBtn = document.getElementById('tabLoginBtn');
+    const tabRegisterBtn = document.getElementById('tabRegisterBtn');
+    const authModalTitle = document.getElementById('authModalTitle');
+    const authSubmitText = document.getElementById('authSubmitText');
+    const authSubmitBtn = document.getElementById('authSubmitBtn');
+    const authSwitchBtn = document.getElementById('authSwitchBtn');
+    const authSwitchText = document.getElementById('authSwitchText');
+    const passwordHint = document.getElementById('passwordHint');
+
+    function openAuthModal(mode = 'login') {
+        authMode = mode;
+        setAuthMode(mode);
+        clearAuthAlert();
+        authModal.showModal();
+    }
+
+    function closeAuthModal() {
+        authModal.close();
+        clearAuthAlert();
+        authForm.reset();
+    }
+
+    function setAuthMode(mode) {
+        authMode = mode;
+        clearAuthAlert();
+        if (mode === 'login') {
+            tabLoginBtn.classList.add('active');
+            tabRegisterBtn.classList.remove('active');
+            authModalTitle.textContent = 'Prihlásenie do účtu';
+            authSubmitText.textContent = 'Prihlásiť sa';
+            authSwitchText.textContent = 'Ešte nemáte účet?';
+            authSwitchBtn.textContent = 'Vytvorte si ho tu';
+            if (passwordHint) passwordHint.style.display = 'none';
+        } else {
+            tabRegisterBtn.classList.add('active');
+            tabLoginBtn.classList.remove('active');
+            authModalTitle.textContent = 'Vytvorenie nového účtu';
+            authSubmitText.textContent = 'Zaregistrovať sa';
+            authSwitchText.textContent = 'Už máte účet?';
+            authSwitchBtn.textContent = 'Prihláste sa tu';
+            if (passwordHint) passwordHint.style.display = 'block';
+        }
+    }
+
+    function showAuthAlert(message, type = 'error') {
+        authAlert.className = `auth-alert ${type}`;
+        authAlert.innerHTML = `<i class="fa-solid ${type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check'}"></i> <span>${escapeHtml(message)}</span>`;
+        authAlert.classList.remove('hidden');
+    }
+
+    function clearAuthAlert() {
+        authAlert.classList.add('hidden');
+        authAlert.textContent = '';
+    }
+
+    tabLoginBtn?.addEventListener('click', () => setAuthMode('login'));
+    tabRegisterBtn?.addEventListener('click', () => setAuthMode('register'));
+    authSwitchBtn?.addEventListener('click', () => setAuthMode(authMode === 'login' ? 'register' : 'login'));
+    document.getElementById('closeAuthModalBtn')?.addEventListener('click', closeAuthModal);
+    document.getElementById('loginBtn')?.addEventListener('click', () => openAuthModal('login'));
+    document.getElementById('sidebarLoginBtn')?.addEventListener('click', () => openAuthModal('login'));
+
+    async function handleLogout() {
+        const client = getSupabaseClient();
+        if (client) {
+            try {
+                await client.auth.signOut();
+            } catch (e) {
+                console.warn('Chyba pri odhlásení:', e);
+            }
+        }
+        currentUser = null;
+        storageMode = 'unauthenticated';
+        subscriptions = [];
+        updateStorageStatusBadge();
+        updateUserProfileUI();
+        updateAllViews();
+        showToast('Boli ste úspešne odhlásený.', 'info');
+        openAuthModal('login');
+    }
+
+    document.getElementById('logoutBtn')?.addEventListener('click', handleLogout);
+    document.getElementById('sidebarLogoutBtn')?.addEventListener('click', handleLogout);
+
+    authForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const client = getSupabaseClient();
+        if (!client) {
+            showAuthAlert('Chyba: Supabase klient nie je inicializovaný.');
+            return;
+        }
+
+        const email = document.getElementById('authEmail').value.trim();
+        const password = document.getElementById('authPassword').value;
+
+        if (!email || !password) {
+            showAuthAlert('Vyplňte e-mail aj heslo.');
+            return;
+        }
+
+        authSubmitBtn.disabled = true;
+        authSubmitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Spracovávam...`;
+        clearAuthAlert();
+
+        try {
+            if (authMode === 'login') {
+                const { data, error } = await client.auth.signInWithPassword({ email, password });
+                if (error) throw error;
+                currentUser = data.user;
+                closeAuthModal();
+                showToast(`Vitajte späť, ${email}! 👋`, 'success');
+            } else {
+                const { data, error } = await client.auth.signUp({ email, password });
+                if (error) throw error;
+                if (data.session) {
+                    currentUser = data.user;
+                    closeAuthModal();
+                    showToast('Účet bol úspešne vytvorený! 🎉', 'success');
+                } else {
+                    showAuthAlert('Registrácia úspešná! Skontrolujte si e-mailovú schránku pre potvrdenie účtu.', 'success');
+                }
+            }
+        } catch (err) {
+            let msg = err.message || 'Nastala neočakávaná chyba.';
+            if (msg.includes('Invalid login credentials')) msg = 'Nesprávny e-mail alebo heslo.';
+            else if (msg.includes('User already registered')) msg = 'Používateľ s týmto e-mailom už existuje.';
+            else if (msg.includes('Password should be at least')) msg = 'Heslo musí mať aspoň 6 znakov.';
+            else if (msg.includes('rate limit')) msg = 'Príliš veľa pokusov. Skúste to prosím neskôr.';
+            showAuthAlert(msg, 'error');
+        } finally {
+            authSubmitBtn.disabled = false;
+            authSubmitBtn.innerHTML = `<i class="fa-solid fa-right-to-bracket"></i> <span>${authMode === 'login' ? 'Prihlásiť sa' : 'Zaregistrovať sa'}</span>`;
+        }
+    });
+
+    // ============================================================
+    //  SUPABASE – CRUD OPERÁCIE S USER_ID & RLS
     // ============================================================
     async function loadFromSupabase() {
         const client = getSupabaseClient();
-        if (!client) {
-            console.warn('Supabase klient nie je inicializovaný');
-            return null;
-        }
+        if (!client || !currentUser) return null;
         try {
             const { data, error } = await client
                 .from(TABLE)
-                .select('*');
+                .select('*')
+                .eq('user_id', currentUser.id);
             if (error) throw error;
             if (!Array.isArray(data)) return [];
             return data.map(dbToApp).filter(Boolean);
@@ -154,9 +326,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function addToSupabase(sub) {
         const client = getSupabaseClient();
-        if (!client) return false;
+        if (!client || !currentUser) return false;
         try {
-            const { error } = await client.from(TABLE).insert(appToDB(sub));
+            const payload = { ...appToDB(sub), user_id: currentUser.id };
+            const { error } = await client.from(TABLE).insert(payload);
             if (error) throw error;
             return true;
         } catch (e) {
@@ -167,9 +340,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function updateInSupabase(sub) {
         const client = getSupabaseClient();
-        if (!client) return false;
+        if (!client || !currentUser) return false;
         try {
-            const { error } = await client.from(TABLE).update(appToDB(sub)).eq('id', sub.id);
+            const payload = { ...appToDB(sub), user_id: currentUser.id };
+            const { error } = await client.from(TABLE).update(payload).eq('id', sub.id).eq('user_id', currentUser.id);
             if (error) throw error;
             return true;
         } catch (e) {
@@ -180,9 +354,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function deleteFromSupabase(subId) {
         const client = getSupabaseClient();
-        if (!client) return false;
+        if (!client || !currentUser) return false;
         try {
-            const { error } = await client.from(TABLE).delete().eq('id', subId);
+            const { error } = await client.from(TABLE).delete().eq('id', subId).eq('user_id', currentUser.id);
             if (error) throw error;
             return true;
         } catch (e) {
@@ -193,9 +367,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function bulkUpsertToSupabase(subs) {
         const client = getSupabaseClient();
-        if (!client) return false;
+        if (!client || !currentUser) return false;
         try {
-            const { error } = await client.from(TABLE).upsert(subs.map(appToDB));
+            const payload = subs.map(s => ({ ...appToDB(s), user_id: currentUser.id }));
+            const { error } = await client.from(TABLE).upsert(payload);
             if (error) throw error;
             return true;
         } catch (e) {
@@ -206,9 +381,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function deleteAllFromSupabase() {
         const client = getSupabaseClient();
-        if (!client) return false;
+        if (!client || !currentUser) return false;
         try {
-            const { error } = await client.from(TABLE).delete().neq('id', '___none___');
+            const { error } = await client.from(TABLE).delete().eq('user_id', currentUser.id);
             if (error) throw error;
             return true;
         } catch (e) {
@@ -218,33 +393,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============================================================
-    //  INICIALIZÁCIA DÁT (Supabase → LocalStorage fallback)
+    //  INICIALIZÁCIA DÁT
     // ============================================================
     async function initData() {
+        if (!currentUser) {
+            storageMode = 'unauthenticated';
+            subscriptions = [];
+            updateStorageStatusBadge();
+            updateUserProfileUI();
+            updateAllViews();
+            return;
+        }
+
         storageMode = 'loading';
         updateStorageStatusBadge();
+        updateUserProfileUI();
 
         const cloudData = await loadFromSupabase();
 
         if (cloudData !== null) {
             storageMode = 'supabase';
             if (cloudData.length === 0) {
+                // Prvé prihlásenie používateľa – nahraj mu ukážkové predplatné
                 const ok = await bulkUpsertToSupabase(DEMO_SUBSCRIPTIONS);
                 subscriptions = ok ? [...DEMO_SUBSCRIPTIONS] : [...DEMO_SUBSCRIPTIONS];
             } else {
                 subscriptions = cloudData;
             }
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
-            showToast('Synchronizované cez Supabase ☁️', 'success');
+            localStorage.setItem(STORAGE_KEY + '_' + currentUser.id, JSON.stringify(subscriptions));
         } else {
             storageMode = 'localStorage';
-            const raw = localStorage.getItem(STORAGE_KEY);
+            const raw = localStorage.getItem(STORAGE_KEY + '_' + currentUser.id);
             if (raw) {
                 try { subscriptions = JSON.parse(raw); }
                 catch (e) { subscriptions = [...DEMO_SUBSCRIPTIONS]; }
             } else {
                 subscriptions = [...DEMO_SUBSCRIPTIONS];
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
             }
             showToast('Offline režim: Používam lokálne dáta.', 'warning');
         }
@@ -254,51 +438,62 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function syncToLocalStorage() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
+        if (currentUser) {
+            localStorage.setItem(STORAGE_KEY + '_' + currentUser.id, JSON.stringify(subscriptions));
+        }
     }
 
     // ============================================================
     //  CRUD OBÁLKY
     // ============================================================
     async function addSubscription(newSub) {
+        if (!currentUser) {
+            openAuthModal('login');
+            showToast('Pre uloženie predplatného sa najskôr prihláste.', 'warning');
+            return;
+        }
         subscriptions.push(newSub);
         syncToLocalStorage();
         updateAllViews();
-        if (storageMode === 'supabase') {
-            const ok = await addToSupabase(newSub);
-            if (!ok) showToast('Predplatné uložené lokálne, sync so Supabase zlyhal.', 'warning');
-        }
+        const ok = await addToSupabase(newSub);
+        if (!ok) showToast('Predplatné uložené lokálne, sync so Supabase zlyhal.', 'warning');
     }
 
     async function updateSubscription(updatedSub) {
+        if (!currentUser) {
+            openAuthModal('login');
+            return;
+        }
         const idx = subscriptions.findIndex(s => s.id === updatedSub.id);
         if (idx !== -1) subscriptions[idx] = updatedSub;
         syncToLocalStorage();
         updateAllViews();
-        if (storageMode === 'supabase') {
-            const ok = await updateInSupabase(updatedSub);
-            if (!ok) showToast('Zmeny uložené lokálne, sync so Supabase zlyhal.', 'warning');
-        }
+        const ok = await updateInSupabase(updatedSub);
+        if (!ok) showToast('Zmeny uložené lokálne, sync so Supabase zlyhal.', 'warning');
     }
 
     async function deleteSubscription(subId) {
+        if (!currentUser) {
+            openAuthModal('login');
+            return;
+        }
         subscriptions = subscriptions.filter(s => s.id !== subId);
         syncToLocalStorage();
         updateAllViews();
-        if (storageMode === 'supabase') {
-            const ok = await deleteFromSupabase(subId);
-            if (!ok) showToast('Zmazané lokálne, sync so Supabase zlyhal.', 'warning');
-        }
+        const ok = await deleteFromSupabase(subId);
+        if (!ok) showToast('Zmazané lokálne, sync so Supabase zlyhal.', 'warning');
     }
 
     async function resetToDemo() {
+        if (!currentUser) {
+            openAuthModal('login');
+            return;
+        }
         subscriptions = JSON.parse(JSON.stringify(DEMO_SUBSCRIPTIONS));
         syncToLocalStorage();
         updateAllViews();
-        if (storageMode === 'supabase') {
-            await deleteAllFromSupabase();
-            await bulkUpsertToSupabase(subscriptions);
-        }
+        await deleteAllFromSupabase();
+        await bulkUpsertToSupabase(subscriptions);
     }
 
     // ============================================================
@@ -306,11 +501,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     function subscribeToRealtime() {
         const client = getSupabaseClient();
-        if (!client || storageMode !== 'supabase') return;
+        if (!client || !currentUser) return;
         try {
-            client
-                .channel('subscriptions-changes')
-                .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, async () => {
+            if (realtimeChannel) client.removeChannel(realtimeChannel);
+            realtimeChannel = client
+                .channel('subscriptions-user-' + currentUser.id)
+                .on('postgres_changes', { event: '*', schema: 'public', table: TABLE, filter: `user_id=eq.${currentUser.id}` }, async () => {
                     const freshData = await loadFromSupabase();
                     if (freshData !== null) {
                         subscriptions = freshData;
@@ -362,12 +558,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (viewName === 'dashboard') renderDashboard();
     }
 
-    mobileToggleBtn.addEventListener('click', () => { sidebar.classList.add('active'); sidebarOverlay.classList.add('active'); });
-    closeSidebarBtn.addEventListener('click', () => { sidebar.classList.remove('active'); sidebarOverlay.classList.remove('active'); });
-    sidebarOverlay.addEventListener('click', () => { sidebar.classList.remove('active'); sidebarOverlay.classList.remove('active'); });
+    mobileToggleBtn?.addEventListener('click', () => { sidebar.classList.add('active'); sidebarOverlay.classList.add('active'); });
+    closeSidebarBtn?.addEventListener('click', () => { sidebar.classList.remove('active'); sidebarOverlay.classList.remove('active'); });
+    sidebarOverlay?.addEventListener('click', () => { sidebar.classList.remove('active'); sidebarOverlay.classList.remove('active'); });
     navLinks.forEach(link => link.addEventListener('click', e => { e.preventDefault(); switchView(link.getAttribute('data-view')); }));
 
-    document.getElementById('quickAddBtn').addEventListener('click', () => switchView('add-subscription'));
+    document.getElementById('quickAddBtn')?.addEventListener('click', () => switchView('add-subscription'));
     document.getElementById('goToSubscriptionsBtn')?.addEventListener('click', () => switchView('subscriptions'));
     document.getElementById('viewAlertsBtn')?.addEventListener('click', () => switchView('notifications'));
 
@@ -386,7 +582,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateAllViews() {
         const { monthlyTotal } = getTotals();
-        document.getElementById('sidebarMonthlyTotal').textContent = formatMoney(monthlyTotal);
+        const sidebarTotal = document.getElementById('sidebarMonthlyTotal');
+        if (sidebarTotal) sidebarTotal.textContent = formatMoney(monthlyTotal);
         renderDashboard();
         renderSubscriptions();
         renderCalculator();
@@ -413,7 +610,10 @@ document.addEventListener('DOMContentLoaded', () => {
             else if (days === 1) { nxtSub.textContent = 'Splatné zajtra!'; nxtSub.style.color = 'var(--warning)'; }
             else if (days < 0) { nxtSub.textContent = `Po splatnosti (${Math.abs(days)} dní)`; nxtSub.style.color = 'var(--danger)'; }
             else { nxtSub.textContent = `O ${days} dní (${formatDateSK(nearest.nextPaymentDate)})`; nxtSub.style.color = 'var(--text-subtle)'; }
-        } else { nxt.textContent = 'Žiadne'; nxtSub.textContent = 'Nemáte aktívne predplatné'; }
+        } else {
+            nxt.textContent = currentUser ? 'Žiadne' : 'Prihláste sa';
+            nxtSub.textContent = currentUser ? 'Nemáte aktívne predplatné' : 'Pre zobrazenie údajov';
+        }
 
         const imminentPayments = subscriptions.filter(s => { const d = getDaysUntil(s.nextPaymentDate); return d >= 0 && d <= 7; });
         const alertBanner = document.getElementById('dashboardAlertBanner');
@@ -462,15 +662,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('searchInput');
     const categoryFilter = document.getElementById('categoryFilter');
     const sortBySelect = document.getElementById('sortBySelect');
-    searchInput.addEventListener('input', renderSubscriptions);
-    categoryFilter.addEventListener('change', renderSubscriptions);
-    sortBySelect.addEventListener('change', renderSubscriptions);
+    searchInput?.addEventListener('input', renderSubscriptions);
+    categoryFilter?.addEventListener('change', renderSubscriptions);
+    sortBySelect?.addEventListener('change', renderSubscriptions);
     document.getElementById('emptyAddBtn')?.addEventListener('click', () => switchView('add-subscription'));
 
     function renderSubscriptions() {
-        const query = searchInput.value.toLowerCase().trim();
-        const selectedCat = categoryFilter.value;
-        const sortBy = sortBySelect.value;
+        const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        const selectedCat = categoryFilter ? categoryFilter.value : 'all';
+        const sortBy = sortBySelect ? sortBySelect.value : 'nextPayment';
 
         let filtered = subscriptions.filter(s => {
             const matchQ = s.name.toLowerCase().includes(query) || (s.notes && s.notes.toLowerCase().includes(query));
@@ -525,9 +725,10 @@ document.addEventListener('DOMContentLoaded', () => {
     //  3. FORMULÁR PRIDANIE
     // ============================================================
     const subscriptionForm = document.getElementById('subscriptionForm');
-    document.getElementById('subNextPaymentDate').value = getRelativeDate(30);
+    const dateInput = document.getElementById('subNextPaymentDate');
+    if (dateInput) dateInput.value = getRelativeDate(30);
 
-    subscriptionForm.addEventListener('submit', async e => {
+    subscriptionForm?.addEventListener('submit', async e => {
         e.preventDefault();
         const name = document.getElementById('subName').value.trim();
         const price = parseFloat(document.getElementById('subPrice').value);
@@ -543,20 +744,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const newSub = { id: 'sub_' + Date.now(), name, price, billingCycle, category, paymentMethod, nextPaymentDate, color, notes, active: true };
         await addSubscription(newSub);
         subscriptionForm.reset();
-        document.getElementById('subNextPaymentDate').value = getRelativeDate(30);
-        showToast(`"${name}" uložené a synchronizované cez Supabase ☁️`, 'success');
+        if (dateInput) dateInput.value = getRelativeDate(30);
+        showToast(`"${name}" bolo uložené ☁️`, 'success');
         switchView('subscriptions');
     });
 
-    document.getElementById('cancelFormBtn').addEventListener('click', () => { subscriptionForm.reset(); switchView('subscriptions'); });
+    document.getElementById('cancelFormBtn')?.addEventListener('click', () => { subscriptionForm.reset(); switchView('subscriptions'); });
 
     // ============================================================
     //  4. EDIT & DELETE MODALS
     // ============================================================
     const editModal = document.getElementById('editModal');
     const editForm = document.getElementById('editForm');
-    document.getElementById('closeEditModalBtn').addEventListener('click', () => editModal.close());
-    document.getElementById('cancelEditBtn').addEventListener('click', () => editModal.close());
+    document.getElementById('closeEditModalBtn')?.addEventListener('click', () => editModal.close());
+    document.getElementById('cancelEditBtn')?.addEventListener('click', () => editModal.close());
 
     function openEditModal(subId) {
         const sub = subscriptions.find(s => s.id === subId);
@@ -573,7 +774,7 @@ document.addEventListener('DOMContentLoaded', () => {
         editModal.showModal();
     }
 
-    editForm.addEventListener('submit', async e => {
+    editForm?.addEventListener('submit', async e => {
         e.preventDefault();
         const id = document.getElementById('editSubId').value;
         const existing = subscriptions.find(s => s.id === id);
@@ -591,12 +792,12 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         await updateSubscription(updated);
         editModal.close();
-        showToast('Zmeny uložené a synchronizované cez Supabase ☁️', 'success');
+        showToast('Zmeny boli uložené a synchronizované ☁️', 'success');
     });
 
     const deleteModal = document.getElementById('deleteModal');
-    document.getElementById('closeDeleteModalBtn').addEventListener('click', () => deleteModal.close());
-    document.getElementById('cancelDeleteBtn').addEventListener('click', () => deleteModal.close());
+    document.getElementById('closeDeleteModalBtn')?.addEventListener('click', () => deleteModal.close());
+    document.getElementById('cancelDeleteBtn')?.addEventListener('click', () => deleteModal.close());
 
     function openDeleteModal(subId) {
         const sub = subscriptions.find(s => s.id === subId);
@@ -606,19 +807,19 @@ document.addEventListener('DOMContentLoaded', () => {
         deleteModal.showModal();
     }
 
-    document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+    document.getElementById('confirmDeleteBtn')?.addEventListener('click', async () => {
         if (!deleteTargetId) return;
         await deleteSubscription(deleteTargetId);
         deleteTargetId = null;
         deleteModal.close();
-        showToast('Predplatné odstránené zo Supabase ☁️', 'info');
+        showToast('Predplatné bolo odstránené ☁️', 'info');
     });
 
     // ============================================================
     //  5. KALKULAČKA ÚSPOR
     // ============================================================
     let allCalcSelected = false;
-    document.getElementById('calcSelectAllBtn').addEventListener('click', () => {
+    document.getElementById('calcSelectAllBtn')?.addEventListener('click', () => {
         allCalcSelected = !allCalcSelected;
         if (allCalcSelected) { subscriptions.forEach(s => selectedCalcSubIds.add(s.id)); document.getElementById('calcSelectAllBtn').textContent = 'Odznačiť všetky'; }
         else { selectedCalcSubIds.clear(); document.getElementById('calcSelectAllBtn').textContent = 'Označiť všetky'; }
@@ -711,7 +912,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     //  7. EXPORT & IMPORT
     // ============================================================
-    document.getElementById('exportCsvBtn').addEventListener('click', () => {
+    document.getElementById('exportCsvBtn')?.addEventListener('click', () => {
         if (!subscriptions.length) { showToast('Nemáte žiadne dáta na export.', 'warning'); return; }
         let csv = '\uFEFF' + 'Názov služby;Suma (€);Frekvencia;Kategória;Spôsob platby;Dátum platby;Poznámka\n';
         subscriptions.forEach(s => { csv += `"${s.name}";"${s.price}";"${s.billingCycle==='monthly'?'Mesačne':'Ročne'}";"${s.category}";"${s.paymentMethod||''}";"${s.nextPaymentDate}";"${(s.notes||'').replace(/;/g,',')}"\n`; });
@@ -722,7 +923,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('CSV súbor bol stiahnutý!', 'success');
     });
 
-    document.getElementById('exportJsonBtn').addEventListener('click', () => {
+    document.getElementById('exportJsonBtn')?.addEventListener('click', () => {
         const url = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(subscriptions, null, 2));
         const a = document.createElement('a');
         a.href = url; a.download = `predplatne_zaloha_${new Date().toISOString().split('T')[0]}.json`;
@@ -730,7 +931,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('JSON záloha bola stiahnutá!', 'success');
     });
 
-    document.getElementById('importJsonInput').addEventListener('change', e => {
+    document.getElementById('importJsonInput')?.addEventListener('change', e => {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
@@ -740,7 +941,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (Array.isArray(parsed)) {
                     subscriptions = parsed;
                     syncToLocalStorage();
-                    if (storageMode === 'supabase') {
+                    if (storageMode === 'supabase' && currentUser) {
                         await deleteAllFromSupabase();
                         await bulkUpsertToSupabase(subscriptions);
                     }
@@ -753,7 +954,7 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.readAsText(file);
     });
 
-    document.getElementById('resetDemoBtn').addEventListener('click', async () => {
+    document.getElementById('resetDemoBtn')?.addEventListener('click', async () => {
         if (confirm('Naozaj chcete obnoviť ukážkové predplatné? Všetky vaše dáta v Supabase budú nahradené.')) {
             await resetToDemo();
             showToast('Ukážkové dáta obnovené v Supabase ☁️', 'info');
@@ -791,6 +992,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     function showToast(message, type = 'info') {
         const container = document.getElementById('toastContainer');
+        if (!container) return;
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
         const icons = { success: 'fa-check-circle', info: 'fa-info-circle', warning: 'fa-exclamation-circle', error: 'fa-circle-xmark' };
@@ -800,10 +1002,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============================================================
-    //  ŠTART
+    //  INICIALIZÁCIA RELÁCIE A ON-AUTH-STATE-CHANGE
     // ============================================================
-    initData().then(() => {
+    const client = getSupabaseClient();
+    if (client) {
+        // 1. Zisti existujúcu reláciu
+        try {
+            const { data: sessionData } = await client.auth.getSession();
+            currentUser = sessionData?.session?.user || null;
+        } catch (e) {
+            console.warn('Chyba načítania existujúcej relácie:', e);
+            currentUser = null;
+        }
+
+        // 2. Počúvaj zmeny autentifikácie (prihlásenie, odhlásenie, token refresh)
+        client.auth.onAuthStateChange(async (event, session) => {
+            const previousUser = currentUser;
+            currentUser = session?.user || null;
+            updateUserProfileUI();
+
+            if (event === 'SIGNED_IN' || (currentUser && !previousUser)) {
+                updateStorageStatusBadge();
+                await initData();
+                subscribeToRealtime();
+            } else if (event === 'SIGNED_OUT' || !currentUser) {
+                storageMode = 'unauthenticated';
+                subscriptions = [];
+                updateStorageStatusBadge();
+                updateAllViews();
+            }
+        });
+    }
+
+    // 3. Spusť aplikáciu
+    await initData();
+    if (currentUser) {
         subscribeToRealtime();
-        switchView('dashboard');
-    });
+    } else {
+        openAuthModal('login');
+    }
+    switchView('dashboard');
 });
