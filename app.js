@@ -182,44 +182,50 @@ document.addEventListener('DOMContentLoaded', async () => {
         authMode = mode;
         setAuthMode(mode);
         clearAuthAlert();
-        authModal.showModal();
+        if (authModal && typeof authModal.showModal === 'function') {
+            authModal.showModal();
+        }
     }
 
     function closeAuthModal() {
-        authModal.close();
+        if (authModal && authModal.open) {
+            authModal.close();
+        }
         clearAuthAlert();
-        authForm.reset();
+        if (authForm) authForm.reset();
     }
 
     function setAuthMode(mode) {
         authMode = mode;
         clearAuthAlert();
         if (mode === 'login') {
-            tabLoginBtn.classList.add('active');
-            tabRegisterBtn.classList.remove('active');
-            authModalTitle.textContent = 'Prihlásenie do účtu';
-            authSubmitText.textContent = 'Prihlásiť sa';
-            authSwitchText.textContent = 'Ešte nemáte účet?';
-            authSwitchBtn.textContent = 'Vytvorte si ho tu';
+            tabLoginBtn?.classList.add('active');
+            tabRegisterBtn?.classList.remove('active');
+            if (authModalTitle) authModalTitle.textContent = 'Prihlásenie do účtu';
+            if (authSubmitText) authSubmitText.textContent = 'Prihlásiť sa';
+            if (authSwitchText) authSwitchText.textContent = 'Ešte nemáte účet?';
+            if (authSwitchBtn) authSwitchBtn.textContent = 'Vytvorte si ho tu';
             if (passwordHint) passwordHint.style.display = 'none';
         } else {
-            tabRegisterBtn.classList.add('active');
-            tabLoginBtn.classList.remove('active');
-            authModalTitle.textContent = 'Vytvorenie nového účtu';
-            authSubmitText.textContent = 'Zaregistrovať sa';
-            authSwitchText.textContent = 'Už máte účet?';
-            authSwitchBtn.textContent = 'Prihláste sa tu';
+            tabRegisterBtn?.classList.add('active');
+            tabLoginBtn?.classList.remove('active');
+            if (authModalTitle) authModalTitle.textContent = 'Vytvorenie nového účtu';
+            if (authSubmitText) authSubmitText.textContent = 'Zaregistrovať sa';
+            if (authSwitchText) authSwitchText.textContent = 'Už máte účet?';
+            if (authSwitchBtn) authSwitchBtn.textContent = 'Prihláste sa tu';
             if (passwordHint) passwordHint.style.display = 'block';
         }
     }
 
     function showAuthAlert(message, type = 'error') {
+        if (!authAlert) return;
         authAlert.className = `auth-alert ${type}`;
         authAlert.innerHTML = `<i class="fa-solid ${type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check'}"></i> <span>${escapeHtml(message)}</span>`;
         authAlert.classList.remove('hidden');
     }
 
     function clearAuthAlert() {
+        if (!authAlert) return;
         authAlert.classList.add('hidden');
         authAlert.textContent = '';
     }
@@ -232,17 +238,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('sidebarLoginBtn')?.addEventListener('click', () => openAuthModal('login'));
 
     async function handleLogout() {
+        const oldUserId = currentUser?.id;
         const client = getSupabaseClient();
         if (client) {
+            if (realtimeChannel) {
+                try { client.removeChannel(realtimeChannel); } catch (e) {}
+                realtimeChannel = null;
+            }
             try {
                 await client.auth.signOut();
             } catch (e) {
                 console.warn('Chyba pri odhlásení:', e);
             }
         }
+
+        // Dôkladné vyčistenie pamäte a lokálneho stavu
         currentUser = null;
-        storageMode = 'unauthenticated';
         subscriptions = [];
+        deleteTargetId = null;
+        selectedCalcSubIds.clear();
+        storageMode = 'unauthenticated';
+
+        // Odstránenie cache odhláseného používateľa
+        if (oldUserId) {
+            localStorage.removeItem(STORAGE_KEY + '_' + oldUserId);
+        }
+        localStorage.removeItem(STORAGE_KEY);
+
         updateStorageStatusBadge();
         updateUserProfileUI();
         updateAllViews();
@@ -393,7 +415,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // ============================================================
-    //  INICIALIZÁCIA DÁT
+    //  INICIALIZÁCIA DÁT (BEZ AUTOMATICKÝCH DEMO DÁT)
     // ============================================================
     async function initData() {
         if (!currentUser) {
@@ -413,22 +435,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (cloudData !== null) {
             storageMode = 'supabase';
-            if (cloudData.length === 0) {
-                // Prvé prihlásenie používateľa – nahraj mu ukážkové predplatné
-                const ok = await bulkUpsertToSupabase(DEMO_SUBSCRIPTIONS);
-                subscriptions = ok ? [...DEMO_SUBSCRIPTIONS] : [...DEMO_SUBSCRIPTIONS];
-            } else {
-                subscriptions = cloudData;
-            }
+            // Použijeme presne dáta používateľa (ak má 0 predplatných, zostáva prázdne)
+            subscriptions = cloudData;
             localStorage.setItem(STORAGE_KEY + '_' + currentUser.id, JSON.stringify(subscriptions));
         } else {
             storageMode = 'localStorage';
             const raw = localStorage.getItem(STORAGE_KEY + '_' + currentUser.id);
             if (raw) {
                 try { subscriptions = JSON.parse(raw); }
-                catch (e) { subscriptions = [...DEMO_SUBSCRIPTIONS]; }
+                catch (e) { subscriptions = []; }
             } else {
-                subscriptions = [...DEMO_SUBSCRIPTIONS];
+                subscriptions = [];
             }
             showToast('Offline režim: Používam lokálne dáta.', 'warning');
         }
@@ -548,9 +565,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             'notifications': 'Upozornenia a nadchádzajúce platby',
             'export': 'Export a záloha dát'
         };
-        pageTitle.textContent = titleMap[viewName] || 'Správca predplatných';
-        sidebar.classList.remove('active');
-        sidebarOverlay.classList.remove('active');
+        if (pageTitle) pageTitle.textContent = titleMap[viewName] || 'Správca predplatných';
+        if (sidebar) sidebar.classList.remove('active');
+        if (sidebarOverlay) sidebarOverlay.classList.remove('active');
         window.scrollTo({ top: 0, behavior: 'smooth' });
         if (viewName === 'calculator') renderCalculator();
         if (viewName === 'notifications') renderNotifications();
@@ -558,9 +575,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (viewName === 'dashboard') renderDashboard();
     }
 
-    mobileToggleBtn?.addEventListener('click', () => { sidebar.classList.add('active'); sidebarOverlay.classList.add('active'); });
-    closeSidebarBtn?.addEventListener('click', () => { sidebar.classList.remove('active'); sidebarOverlay.classList.remove('active'); });
-    sidebarOverlay?.addEventListener('click', () => { sidebar.classList.remove('active'); sidebarOverlay.classList.remove('active'); });
+    mobileToggleBtn?.addEventListener('click', () => { sidebar?.classList.add('active'); sidebarOverlay?.classList.add('active'); });
+    closeSidebarBtn?.addEventListener('click', () => { sidebar?.classList.remove('active'); sidebarOverlay?.classList.remove('active'); });
+    sidebarOverlay?.addEventListener('click', () => { sidebar?.classList.remove('active'); sidebarOverlay?.classList.remove('active'); });
     navLinks.forEach(link => link.addEventListener('click', e => { e.preventDefault(); switchView(link.getAttribute('data-view')); }));
 
     document.getElementById('quickAddBtn')?.addEventListener('click', () => switchView('add-subscription'));
@@ -595,9 +612,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ============================================================
     function renderDashboard() {
         const { monthlyTotal, yearlyTotal } = getTotals();
-        document.getElementById('dashboardMonthly').textContent = formatMoney(monthlyTotal);
-        document.getElementById('dashboardYearly').textContent = formatMoney(yearlyTotal);
-        document.getElementById('dashboardCount').textContent = subscriptions.length;
+        const dMonth = document.getElementById('dashboardMonthly');
+        const dYear = document.getElementById('dashboardYearly');
+        const dCount = document.getElementById('dashboardCount');
+        if (dMonth) dMonth.textContent = formatMoney(monthlyTotal);
+        if (dYear) dYear.textContent = formatMoney(yearlyTotal);
+        if (dCount) dCount.textContent = subscriptions.length;
 
         const sorted = [...subscriptions].sort((a, b) => new Date(a.nextPaymentDate) - new Date(b.nextPaymentDate));
         const nxt = document.getElementById('dashboardNextPayment');
@@ -605,37 +625,49 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (sorted.length > 0) {
             const nearest = sorted[0];
             const days = getDaysUntil(nearest.nextPaymentDate);
-            nxt.textContent = `${nearest.name} (${formatMoney(nearest.price)})`;
-            if (days === 0) { nxtSub.textContent = 'Splatné dnes!'; nxtSub.style.color = 'var(--danger)'; }
-            else if (days === 1) { nxtSub.textContent = 'Splatné zajtra!'; nxtSub.style.color = 'var(--warning)'; }
-            else if (days < 0) { nxtSub.textContent = `Po splatnosti (${Math.abs(days)} dní)`; nxtSub.style.color = 'var(--danger)'; }
-            else { nxtSub.textContent = `O ${days} dní (${formatDateSK(nearest.nextPaymentDate)})`; nxtSub.style.color = 'var(--text-subtle)'; }
+            if (nxt) nxt.textContent = `${nearest.name} (${formatMoney(nearest.price)})`;
+            if (nxtSub) {
+                if (days === 0) { nxtSub.textContent = 'Splatné dnes!'; nxtSub.style.color = 'var(--danger)'; }
+                else if (days === 1) { nxtSub.textContent = 'Splatné zajtra!'; nxtSub.style.color = 'var(--warning)'; }
+                else if (days < 0) { nxtSub.textContent = `Po splatnosti (${Math.abs(days)} dní)`; nxtSub.style.color = 'var(--danger)'; }
+                else { nxtSub.textContent = `O ${days} dní (${formatDateSK(nearest.nextPaymentDate)})`; nxtSub.style.color = 'var(--text-subtle)'; }
+            }
         } else {
-            nxt.textContent = currentUser ? 'Žiadne' : 'Prihláste sa';
-            nxtSub.textContent = currentUser ? 'Nemáte aktívne predplatné' : 'Pre zobrazenie údajov';
+            if (nxt) nxt.textContent = currentUser ? 'Žiadne' : 'Prihláste sa';
+            if (nxtSub) nxtSub.textContent = currentUser ? 'Zatiaľ nemáte žiadne predplatné' : 'Pre zobrazenie údajov';
         }
 
         const imminentPayments = subscriptions.filter(s => { const d = getDaysUntil(s.nextPaymentDate); return d >= 0 && d <= 7; });
         const alertBanner = document.getElementById('dashboardAlertBanner');
         if (imminentPayments.length > 0) {
-            alertBanner.classList.remove('hidden');
-            document.getElementById('alertBannerTitle').textContent = `Upozornenie: Blíži sa ${imminentPayments.length} platba!`;
-            document.getElementById('alertBannerText').textContent = `Máte platby splatné v najbližších 7 dňoch v celkovej hodnote ${formatMoney(imminentPayments.reduce((acc, s) => acc + s.price, 0))}.`;
-        } else { alertBanner.classList.add('hidden'); }
+            alertBanner?.classList.remove('hidden');
+            const abTitle = document.getElementById('alertBannerTitle');
+            const abText = document.getElementById('alertBannerText');
+            if (abTitle) abTitle.textContent = `Upozornenie: Blíži sa ${imminentPayments.length} platba!`;
+            if (abText) abText.textContent = `Máte platby splatné v najbližších 7 dňoch v celkovej hodnote ${formatMoney(imminentPayments.reduce((acc, s) => acc + s.price, 0))}.`;
+        } else {
+            alertBanner?.classList.add('hidden');
+        }
 
         const tbody = document.getElementById('dashboardUpcomingTable');
-        tbody.innerHTML = '';
         const emptyEl = document.getElementById('dashboardUpcomingEmpty');
-        if (sorted.length === 0) { emptyEl.classList.remove('hidden'); }
-        else {
-            emptyEl.classList.add('hidden');
-            sorted.slice(0, 5).forEach(sub => {
-                const days = getDaysUntil(sub.nextPaymentDate);
-                let badgeHtml = days < 0 ? `<span class="badge badge-danger">Po splatnosti</span>` : days === 0 ? `<span class="badge badge-danger">Dnes</span>` : days <= 3 ? `<span class="badge badge-warning">O ${days} dni</span>` : `<span class="badge badge-neutral">O ${days} dní</span>`;
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td><div class="sub-item-cell"><div class="sub-item-icon" style="background-color:${sub.color||'#6366f1'}"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i></div><span>${escapeHtml(sub.name)}</span></div></td><td><span class="sub-badge-category">${escapeHtml(sub.category)}</span></td><td><strong>${formatMoney(sub.price)}</strong> <small class="text-subtle">/${sub.billingCycle==='monthly'?'mes.':'rok'}</small></td><td>${formatDateSK(sub.nextPaymentDate)}</td><td>${badgeHtml}</td>`;
-                tbody.appendChild(tr);
-            });
+        if (tbody) {
+            tbody.innerHTML = '';
+            if (sorted.length === 0) {
+                emptyEl?.classList.remove('hidden');
+                if (emptyEl) {
+                    emptyEl.innerHTML = `<i class="fa-regular fa-folder-open"></i><p>${currentUser ? 'Zatiaľ nemáte žiadne predplatné.' : 'Prihláste sa pre zobrazenie predplatných.'}</p>`;
+                }
+            } else {
+                emptyEl?.classList.add('hidden');
+                sorted.slice(0, 5).forEach(sub => {
+                    const days = getDaysUntil(sub.nextPaymentDate);
+                    let badgeHtml = days < 0 ? `<span class="badge badge-danger">Po splatnosti</span>` : days === 0 ? `<span class="badge badge-danger">Dnes</span>` : days <= 3 ? `<span class="badge badge-warning">O ${days} dni</span>` : `<span class="badge badge-neutral">O ${days} dní</span>`;
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td><div class="sub-item-cell"><div class="sub-item-icon" style="background-color:${sub.color||'#6366f1'}"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i></div><span>${escapeHtml(sub.name)}</span></div></td><td><span class="sub-badge-category">${escapeHtml(sub.category)}</span></td><td><strong>${formatMoney(sub.price)}</strong> <small class="text-subtle">/${sub.billingCycle==='monthly'?'mes.':'rok'}</small></td><td>${formatDateSK(sub.nextPaymentDate)}</td><td>${badgeHtml}</td>`;
+                    tbody.appendChild(tr);
+                });
+            }
         }
 
         const categoryTotals = {};
@@ -644,16 +676,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             categoryTotals[cat] = (categoryTotals[cat] || 0) + (sub.billingCycle === 'monthly' ? sub.price : sub.price / 12);
         });
         const catList = document.getElementById('dashboardCategoriesList');
-        catList.innerHTML = '';
-        Object.keys(categoryTotals).sort((a, b) => categoryTotals[b] - categoryTotals[a]).forEach(cat => {
-            const val = categoryTotals[cat];
-            const pct = monthlyTotal > 0 ? Math.round((val / monthlyTotal) * 100) : 0;
-            const div = document.createElement('div');
-            div.className = 'category-item';
-            div.innerHTML = `<div class="cat-item-top"><span class="cat-item-name"><i class="fa-solid ${getCategoryIcon(cat)}" style="color:${getCategoryColor(cat)};margin-right:6px;"></i>${cat} (${pct}%)</span><span class="cat-item-price">${formatMoney(val)}/mes.</span></div><div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%;background:${getCategoryColor(cat)};"></div></div>`;
-            catList.appendChild(div);
-        });
-        if (!Object.keys(categoryTotals).length) catList.innerHTML = `<p class="text-subtle" style="text-align:center;">Žiadne dáta</p>`;
+        if (catList) {
+            catList.innerHTML = '';
+            Object.keys(categoryTotals).sort((a, b) => categoryTotals[b] - categoryTotals[a]).forEach(cat => {
+                const val = categoryTotals[cat];
+                const pct = monthlyTotal > 0 ? Math.round((val / monthlyTotal) * 100) : 0;
+                const div = document.createElement('div');
+                div.className = 'category-item';
+                div.innerHTML = `<div class="cat-item-top"><span class="cat-item-name"><i class="fa-solid ${getCategoryIcon(cat)}" style="color:${getCategoryColor(cat)};margin-right:6px;"></i>${cat} (${pct}%)</span><span class="cat-item-price">${formatMoney(val)}/mes.</span></div><div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%;background:${getCategoryColor(cat)};"></div></div>`;
+                catList.appendChild(div);
+            });
+            if (!Object.keys(categoryTotals).length) {
+                catList.innerHTML = `<p class="text-subtle" style="text-align:center;">Žiadne kategórie</p>`;
+            }
+        }
     }
 
     // ============================================================
@@ -687,9 +723,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const container = document.getElementById('subscriptionsContainer');
         const emptyState = document.getElementById('subscriptionsEmpty');
+        if (!container) return;
         container.innerHTML = '';
-        if (filtered.length === 0) { emptyState.classList.remove('hidden'); return; }
-        emptyState.classList.add('hidden');
+        if (filtered.length === 0) {
+            emptyState?.classList.remove('hidden');
+            return;
+        }
+        emptyState?.classList.add('hidden');
 
         filtered.forEach(sub => {
             const days = getDaysUntil(sub.nextPaymentDate);
@@ -749,15 +789,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         switchView('subscriptions');
     });
 
-    document.getElementById('cancelFormBtn')?.addEventListener('click', () => { subscriptionForm.reset(); switchView('subscriptions'); });
+    document.getElementById('cancelFormBtn')?.addEventListener('click', () => { subscriptionForm?.reset(); switchView('subscriptions'); });
 
     // ============================================================
     //  4. EDIT & DELETE MODALS
     // ============================================================
     const editModal = document.getElementById('editModal');
     const editForm = document.getElementById('editForm');
-    document.getElementById('closeEditModalBtn')?.addEventListener('click', () => editModal.close());
-    document.getElementById('cancelEditBtn')?.addEventListener('click', () => editModal.close());
+    document.getElementById('closeEditModalBtn')?.addEventListener('click', () => editModal?.close());
+    document.getElementById('cancelEditBtn')?.addEventListener('click', () => editModal?.close());
 
     function openEditModal(subId) {
         const sub = subscriptions.find(s => s.id === subId);
@@ -771,7 +811,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('editSubNextPaymentDate').value = sub.nextPaymentDate;
         document.getElementById('editSubColor').value = sub.color || '#6366f1';
         document.getElementById('editSubNotes').value = sub.notes || '';
-        editModal.showModal();
+        editModal?.showModal();
     }
 
     editForm?.addEventListener('submit', async e => {
@@ -791,27 +831,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             notes: document.getElementById('editSubNotes').value.trim()
         };
         await updateSubscription(updated);
-        editModal.close();
+        editModal?.close();
         showToast('Zmeny boli uložené a synchronizované ☁️', 'success');
     });
 
     const deleteModal = document.getElementById('deleteModal');
-    document.getElementById('closeDeleteModalBtn')?.addEventListener('click', () => deleteModal.close());
-    document.getElementById('cancelDeleteBtn')?.addEventListener('click', () => deleteModal.close());
+    document.getElementById('closeDeleteModalBtn')?.addEventListener('click', () => deleteModal?.close());
+    document.getElementById('cancelDeleteBtn')?.addEventListener('click', () => deleteModal?.close());
 
     function openDeleteModal(subId) {
         const sub = subscriptions.find(s => s.id === subId);
         if (!sub) return;
         deleteTargetId = subId;
-        document.getElementById('deleteTargetName').textContent = sub.name;
-        deleteModal.showModal();
+        const targetNameEl = document.getElementById('deleteTargetName');
+        if (targetNameEl) targetNameEl.textContent = sub.name;
+        deleteModal?.showModal();
     }
 
     document.getElementById('confirmDeleteBtn')?.addEventListener('click', async () => {
         if (!deleteTargetId) return;
         await deleteSubscription(deleteTargetId);
         deleteTargetId = null;
-        deleteModal.close();
+        deleteModal?.close();
         showToast('Predplatné bolo odstránené ☁️', 'info');
     });
 
@@ -828,8 +869,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderCalculator() {
         const container = document.getElementById('calcItemsContainer');
+        if (!container) return;
         container.innerHTML = '';
-        if (!subscriptions.length) { container.innerHTML = `<p class="text-subtle" style="text-align:center;">Žiadne predplatné pre výpočet.</p>`; return; }
+        if (!subscriptions.length) { container.innerHTML = `<p class="text-subtle" style="text-align:center;">Zatiaľ nemáte žiadne predplatné pre výpočet.</p>`; return; }
         subscriptions.forEach(sub => {
             const isChecked = selectedCalcSubIds.has(sub.id);
             const mPrice = sub.billingCycle === 'monthly' ? sub.price : sub.price / 12;
@@ -837,9 +879,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             item.className = 'calc-item';
             item.innerHTML = `<div class="calc-item-left"><input type="checkbox" class="calc-item-checkbox" ${isChecked?'checked':''} data-id="${sub.id}"><div class="calc-item-info"><strong>${escapeHtml(sub.name)}</strong><span>${escapeHtml(sub.category)}</span></div></div><div class="calc-item-price">${formatMoney(mPrice)}/mes.</div>`;
             item.addEventListener('click', e => {
-                if (e.target.tagName !== 'INPUT') item.querySelector('.calc-item-checkbox').checked = !item.querySelector('.calc-item-checkbox').checked;
+                if (e.target.tagName !== 'INPUT') {
+                    const cb = item.querySelector('.calc-item-checkbox');
+                    if (cb) cb.checked = !cb.checked;
+                }
                 const cb = item.querySelector('.calc-item-checkbox');
-                if (cb.checked) selectedCalcSubIds.add(sub.id); else selectedCalcSubIds.delete(sub.id);
+                if (cb) {
+                    if (cb.checked) selectedCalcSubIds.add(sub.id);
+                    else selectedCalcSubIds.delete(sub.id);
+                }
                 updateSavingsCalculations();
             });
             container.appendChild(item);
@@ -855,18 +903,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                 yearlySavings += sub.billingCycle === 'monthly' ? sub.price * 12 : sub.price;
             }
         });
-        document.getElementById('calcMonthlySavings').textContent = formatMoney(monthlySavings);
-        document.getElementById('calcYearlySavings').textContent = formatMoney(yearlySavings);
+        const mSave = document.getElementById('calcMonthlySavings');
+        const ySave = document.getElementById('calcYearlySavings');
+        if (mSave) mSave.textContent = formatMoney(monthlySavings);
+        if (ySave) ySave.textContent = formatMoney(yearlySavings);
 
         const targetsList = document.getElementById('calcTargetsList');
-        targetsList.innerHTML = '';
-        [{ name: 'Kino pre dvoch + pukance', price: 30, icon: 'fa-film' }, { name: 'Ročné predplatné knižnej aplikácie', price: 80, icon: 'fa-book' }, { name: 'Kvalitné bezdrôtové slúchadlá', price: 150, icon: 'fa-headphones' }, { name: 'Víkendový wellness pobyt', price: 300, icon: 'fa-spa' }, { name: 'Nový smartfón strednej triedy', price: 600, icon: 'fa-mobile-screen' }, { name: 'Letná dovolenka pri mori', price: 1200, icon: 'fa-plane' }].forEach(m => {
-            const isAchieved = yearlySavings >= m.price;
-            const div = document.createElement('div');
-            div.className = `target-item ${isAchieved ? 'achieved' : ''}`;
-            div.innerHTML = `<i class="fa-solid ${m.icon} target-icon"></i><div class="target-text">${m.name} (${formatMoney(m.price)})</div><div class="target-status">${isAchieved ? '<i class="fa-solid fa-check-circle text-success"></i> Dosiahnuté!' : 'Chýba ' + formatMoney(m.price - yearlySavings)}</div>`;
-            targetsList.appendChild(div);
-        });
+        if (targetsList) {
+            targetsList.innerHTML = '';
+            [{ name: 'Kino pre dvoch + pukance', price: 30, icon: 'fa-film' }, { name: 'Ročné predplatné knižnej aplikácie', price: 80, icon: 'fa-book' }, { name: 'Kvalitné bezdrôtové slúchadlá', price: 150, icon: 'fa-headphones' }, { name: 'Víkendový wellness pobyt', price: 300, icon: 'fa-spa' }, { name: 'Nový smartfón strednej triedy', price: 600, icon: 'fa-mobile-screen' }, { name: 'Letná dovolenka pri mori', price: 1200, icon: 'fa-plane' }].forEach(m => {
+                const isAchieved = yearlySavings >= m.price;
+                const div = document.createElement('div');
+                div.className = `target-item ${isAchieved ? 'achieved' : ''}`;
+                div.innerHTML = `<i class="fa-solid ${m.icon} target-icon"></i><div class="target-text">${m.name} (${formatMoney(m.price)})</div><div class="target-status">${isAchieved ? '<i class="fa-solid fa-check-circle text-success"></i> Dosiahnuté!' : 'Chýba ' + formatMoney(m.price - yearlySavings)}</div>`;
+                targetsList.appendChild(div);
+            });
+        }
     }
 
     // ============================================================
@@ -885,6 +937,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const container = document.getElementById('notificationsList');
         const badge = document.getElementById('navNotificationBadge');
         const bottomBadge = document.getElementById('bottomNavNotificationBadge');
+        if (!container) return;
         container.innerHTML = '';
         const within7 = subscriptions.filter(s => { const d = getDaysUntil(s.nextPaymentDate); return d >= 0 && d <= 7; });
         if (within7.length > 0) {
@@ -896,7 +949,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const filtered = subscriptions.filter(s => { const d = getDaysUntil(s.nextPaymentDate); return d >= 0 && d <= notificationDaysFilter; }).sort((a, b) => new Date(a.nextPaymentDate) - new Date(b.nextPaymentDate));
-        if (!filtered.length) { container.innerHTML = `<div class="empty-state"><i class="fa-regular fa-bell-slash"></i><h3>Žiadne platby v najbližších ${notificationDaysFilter} dňoch</h3><p>Všetky vaše platby sú v poriadku.</p></div>`; return; }
+        if (!filtered.length) {
+            container.innerHTML = `<div class="empty-state"><i class="fa-regular fa-bell-slash"></i><h3>Žiadne platby v najbližších ${notificationDaysFilter} dňoch</h3><p>${currentUser ? 'Všetky vaše platby sú v poriadku.' : 'Prihláste sa pre zobrazenie upozornení.'}</p></div>`;
+            return;
+        }
 
         filtered.forEach(sub => {
             const days = getDaysUntil(sub.nextPaymentDate);
@@ -910,7 +966,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // ============================================================
-    //  7. EXPORT & IMPORT
+    //  7. EXPORT & IMPORT ZO ZÁLOHY (S USER_ID & MAZANÍM PRED IMPORTOM)
     // ============================================================
     document.getElementById('exportCsvBtn')?.addEventListener('click', () => {
         if (!subscriptions.length) { showToast('Nemáte žiadne dáta na export.', 'warning'); return; }
@@ -924,6 +980,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     document.getElementById('exportJsonBtn')?.addEventListener('click', () => {
+        if (!subscriptions.length) { showToast('Nemáte žiadne dáta na export.', 'warning'); return; }
         const url = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(subscriptions, null, 2));
         const a = document.createElement('a');
         a.href = url; a.download = `predplatne_zaloha_${new Date().toISOString().split('T')[0]}.json`;
@@ -934,28 +991,66 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('importJsonInput')?.addEventListener('change', e => {
         const file = e.target.files[0];
         if (!file) return;
+
+        if (!currentUser) {
+            showToast('Pre import zo zálohy sa najskôr prihláste.', 'warning');
+            openAuthModal('login');
+            e.target.value = '';
+            return;
+        }
+
         const reader = new FileReader();
         reader.onload = async evt => {
             try {
                 const parsed = JSON.parse(evt.target.result);
                 if (Array.isArray(parsed)) {
-                    subscriptions = parsed;
-                    syncToLocalStorage();
-                    if (storageMode === 'supabase' && currentUser) {
-                        await deleteAllFromSupabase();
-                        await bulkUpsertToSupabase(subscriptions);
+                    // 1. Sanitizácia a namapovanie každého záznamu
+                    const cleanItems = parsed.map(item => ({
+                        id: String(item.id || ('sub_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5))),
+                        name: String(item.name || 'Neznáma služba'),
+                        price: parseFloat(item.price) || 0,
+                        billingCycle: String(item.billingCycle || item.billing_cycle || 'monthly'),
+                        category: String(item.category || 'Iné'),
+                        paymentMethod: String(item.paymentMethod || item.payment_method || 'Platebná karta'),
+                        nextPaymentDate: String(item.nextPaymentDate || item.next_payment_date || getRelativeDate(30)),
+                        color: String(item.color || '#6366f1'),
+                        notes: String(item.notes || ''),
+                        active: item.active !== false
+                    }));
+
+                    // 2. Najprv vymaž staré záznamy prihláseného používateľa v Supabase
+                    await deleteAllFromSupabase();
+
+                    // 3. Vlož nové záznamy s priradeným user_id
+                    const ok = await bulkUpsertToSupabase(cleanItems);
+                    if (ok) {
+                        subscriptions = cleanItems;
+                        syncToLocalStorage();
+                        updateAllViews();
+                        showToast(`Úspešne obnovených ${cleanItems.length} predplatných zo zálohy ☁️`, 'success');
+                        switchView('dashboard');
+                    } else {
+                        showToast('Chyba pri ukladaní importovaných údajov do Supabase.', 'error');
                     }
-                    updateAllViews();
-                    showToast('Dáta importované a synchronizované cez Supabase ☁️', 'success');
-                    switchView('dashboard');
-                } else showToast('Neplatný formát JSON súboru.', 'error');
-            } catch { showToast('Chyba pri čítaní JSON súboru.', 'error'); }
+                } else {
+                    showToast('Neplatný formát JSON súboru (očakáva sa pole predplatných).', 'error');
+                }
+            } catch (err) {
+                console.error('Import JSON error:', err);
+                showToast('Chyba pri čítaní alebo spracovaní JSON súboru.', 'error');
+            } finally {
+                e.target.value = '';
+            }
         };
         reader.readAsText(file);
     });
 
     document.getElementById('resetDemoBtn')?.addEventListener('click', async () => {
-        if (confirm('Naozaj chcete obnoviť ukážkové predplatné? Všetky vaše dáta v Supabase budú nahradené.')) {
+        if (!currentUser) {
+            openAuthModal('login');
+            return;
+        }
+        if (confirm('Naozaj chcete obnoviť ukážkové predplatné? Všetky vaše existujúce dáta v Supabase budú nahradené.')) {
             await resetToDemo();
             showToast('Ukážkové dáta obnovené v Supabase ☁️', 'info');
             switchView('dashboard');
