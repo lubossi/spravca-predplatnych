@@ -99,10 +99,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
     }
 
+    function generateId() {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            return 'sub_' + crypto.randomUUID();
+        }
+        return 'sub_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
     function appToDB(sub, explicitUserId = null) {
         const userId = explicitUserId || currentUser?.id || null;
         return {
-            id: String(sub.id || ('sub_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6))),
+            id: String(sub.id || generateId()),
             user_id: userId,
             name: String(sub.name || 'Neznáma služba').trim(),
             price: parseFloat(sub.price) || 0,
@@ -1032,45 +1039,28 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return;
                 }
 
-                // 2. Mapovanie položiek zo zálohy s explicitným priradením user_id
+                // 2. Mapovanie položiek zo zálohy s explicitným priradením user_id a overením ID
                 const rowsToInsert = parsed.map(item => appToDB(item, user.id));
 
-                // 3. Najprv vymaž staré záznamy používateľa v Supabase
-                const { error: deleteError } = await client
+                // 3. Bezpečný zápis cez upsert s { onConflict: 'id' }
+                const { error: upsertError } = await client
                     .from(TABLE)
-                    .delete()
-                    .eq('user_id', user.id);
+                    .upsert(rowsToInsert, { onConflict: 'id' });
 
-                if (deleteError) {
-                    console.error('Chyba pri mazaní starých záznamov pred importom:', deleteError);
-                    showToast(`Chyba pri mazaní starých záznamov: ${deleteError.message || deleteError}`, 'error');
+                if (upsertError) {
+                    console.error('Chyba pri upsert do Supabase:', upsertError);
+                    showToast(`Chyba pri importe do Supabase: ${upsertError.message || JSON.stringify(upsertError)}`, 'error');
                     return;
                 }
 
-                // 4. Uloženie cez čistý INSERT (rešpektuje RLS WITH CHECK)
-                const { error: insertError } = await client
-                    .from(TABLE)
-                    .insert(rowsToInsert);
-
-                if (insertError) {
-                    console.error('Chyba pri vkladaní (insert) do Supabase:', insertError);
-                    showToast(`Chyba pri importe do Supabase: ${insertError.message || insertError}`, 'error');
-                    return;
-                }
-
-                // 5. Úspešná synchronizácia do lokálneho stavu a UI
-                subscriptions = rowsToInsert.map(dbToApp).filter(Boolean);
-                storageMode = 'supabase';
-                syncToLocalStorage();
-                updateStorageStatusBadge();
-                updateUserProfileUI();
-                updateAllViews();
-                showToast(`Úspešne importovaných a synchronizovaných ${subscriptions.length} predplatných ☁️`, 'success');
+                // 4. Okamžitá obnova stavu UI priamo z databázy
+                await initData();
+                showToast(`Úspešne importovaných ${subscriptions.length} predplatných ☁️`, 'success');
                 switchView('dashboard');
 
             } catch (err) {
                 console.error('Import JSON error:', err);
-                showToast(`Chyba pri čítaní JSON súboru: ${err.message || err}`, 'error');
+                showToast(`Chyba pri spracovaní JSON: ${err.message || err}`, 'error');
             } finally {
                 e.target.value = '';
             }
