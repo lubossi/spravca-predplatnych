@@ -564,7 +564,34 @@
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div class="toast-container" id="toastContainer"></div>
 
+    <!-- MOBILE BOTTOM NAVIGATION BAR -->
+    <nav class="bottom-nav" id="bottomNav">
+        <a href="#dashboard" class="bottom-nav-item nav-link active" data-view="dashboard" aria-label="Prehľad">
+            <div class="bottom-nav-icon"><i class="fa-solid fa-chart-pie"></i></div>
+            <span>Prehľad</span>
+        </a>
+        <a href="#subscriptions" class="bottom-nav-item nav-link" data-view="subscriptions" aria-label="Predplatné">
+            <div class="bottom-nav-icon"><i class="fa-solid fa-list-check"></i></div>
+            <span>Predplatné</span>
+        </a>
+        <a href="#add-subscription" class="bottom-nav-item nav-link bottom-nav-add" data-view="add-subscription" aria-label="Pridať">
+            <div class="bottom-nav-icon add-btn-circle"><i class="fa-solid fa-plus"></i></div>
+            <span>Pridať</span>
+        </a>
+        <a href="#calculator" class="bottom-nav-item nav-link" data-view="calculator" aria-label="Kalkulačka">
+            <div class="bottom-nav-icon"><i class="fa-solid fa-calculator"></i></div>
+            <span>Kalkulačka</span>
+        </a>
+        <a href="#notifications" class="bottom-nav-item nav-link" data-view="notifications" aria-label="Upozornenia">
+            <div class="bottom-nav-icon">
+                <i class="fa-solid fa-bell"></i>
+                <span class="badge badge-alert hidden" id="bottomNavNotificationBadge">0</span>
+            </div>
+            <span>Upozornenia</span>
+        </a>
+    </nav>
+
     <!-- Application Script -->
-    <script src="app.js?v=20260817-5"></script>
+    <script src="app.js?v=20260817-6"></script>
 </body>
 </html>

@@ -683,9 +683,16 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderNotifications() {
         const container = document.getElementById('notificationsList');
         const badge = document.getElementById('navNotificationBadge');
+        const bottomBadge = document.getElementById('bottomNavNotificationBadge');
         container.innerHTML = '';
         const within7 = subscriptions.filter(s => { const d = getDaysUntil(s.nextPaymentDate); return d >= 0 && d <= 7; });
-        if (within7.length > 0) { badge.textContent = within7.length; badge.classList.remove('hidden'); } else { badge.classList.add('hidden'); }
+        if (within7.length > 0) {
+            if (badge) { badge.textContent = within7.length; badge.classList.remove('hidden'); }
+            if (bottomBadge) { bottomBadge.textContent = within7.length; bottomBadge.classList.remove('hidden'); }
+        } else {
+            if (badge) badge.classList.add('hidden');
+            if (bottomBadge) bottomBadge.classList.add('hidden');
+        }
 
         const filtered = subscriptions.filter(s => { const d = getDaysUntil(s.nextPaymentDate); return d >= 0 && d <= notificationDaysFilter; }).sort((a, b) => new Date(a.nextPaymentDate) - new Date(b.nextPaymentDate));
         if (!filtered.length) { container.innerHTML = `<div class="empty-state"><i class="fa-regular fa-bell-slash"></i><h3>Žiadne platby v najbližších ${notificationDaysFilter} dňoch</h3><p>Všetky vaše platby sú v poriadku.</p></div>`; return; }

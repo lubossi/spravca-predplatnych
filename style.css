@@ -1376,7 +1376,105 @@ body::after {
 
 .hidden { display: none !important; }
 
-/* Responsive Breakpoints */
+/* ==========================================================================
+   MOBILE BOTTOM NAVIGATION BAR
+   ========================================================================== */
+.bottom-nav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 66px;
+    background: rgba(15, 23, 42, 0.94);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: var(--border-glass-light);
+    z-index: 999;
+    align-items: center;
+    justify-content: space-around;
+    padding: 6px 8px max(8px, env(safe-area-inset-bottom)) 8px;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 11px;
+    font-weight: 600;
+    gap: 3px;
+    padding: 6px 10px;
+    border-radius: var(--radius-md);
+    transition: var(--transition);
+    flex: 1;
+    text-align: center;
+    position: relative;
+}
+
+.bottom-nav-item.active {
+    color: var(--primary);
+}
+
+.bottom-nav-item.active .bottom-nav-icon {
+    transform: scale(1.15);
+    color: var(--primary);
+    filter: drop-shadow(0 0 8px var(--primary-glow));
+}
+
+.bottom-nav-icon {
+    font-size: 19px;
+    transition: var(--transition);
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bottom-nav-icon .badge-alert {
+    position: absolute;
+    top: -6px;
+    right: -10px;
+    font-size: 10px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--danger);
+    color: #fff;
+}
+
+/* Elevated Circular Plus Add Button in Bottom Nav */
+.bottom-nav-add .add-btn-circle {
+    width: 38px;
+    height: 38px;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 17px;
+    box-shadow: 0 4px 14px var(--primary-glow);
+    margin-top: -12px;
+    border: 2px solid #0f172a;
+    transition: var(--transition);
+}
+
+.bottom-nav-add.active .add-btn-circle {
+    transform: scale(1.1) rotate(90deg);
+    box-shadow: 0 6px 20px var(--primary-glow);
+}
+
+/* ==========================================================================
+   RESPONSIVE BREAKPOINTS (MOBILE FIRST / ADAPTIVE)
+   ========================================================================== */
 @media (max-width: 1024px) {
     .dashboard-grid { grid-template-columns: 1fr; }
     .dashboard-card.span-2 { grid-column: span 1; }
@@ -1384,34 +1482,280 @@ body::after {
 }
 
 @media (max-width: 768px) {
+    body {
+        padding-bottom: calc(74px + env(safe-area-inset-bottom));
+    }
+
+    /* Bottom Navigation Active */
+    .bottom-nav {
+        display: flex;
+    }
+
+    /* Hide Sidebar by default */
     .sidebar {
         transform: translateX(-100%);
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
     }
+
     .sidebar.active {
         transform: translateX(0);
     }
+
     .sidebar-overlay.active {
         display: block;
     }
+
     .close-sidebar-btn {
         display: block;
     }
+
     .main-wrapper {
         margin-left: 0;
+        width: 100%;
     }
+
     .mobile-toggle-btn {
         display: flex;
+        min-width: 44px;
+        min-height: 44px;
+        align-items: center;
+        justify-content: center;
     }
-    .content-body {
-        padding: 20px 16px;
-    }
+
     .top-header {
         padding: 0 16px;
+        height: 64px;
     }
+
+    .page-title {
+        font-size: 18px;
+    }
+
+    .storage-status-badge {
+        font-size: 11px;
+        padding: 4px 8px;
+    }
+
+    .content-body {
+        padding: 16px 12px;
+    }
+
+    /* 1. METRICS GRID: Stack in 1 Column on Mobile */
+    .metrics-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .metric-card {
+        padding: 16px 18px;
+    }
+
+    .metric-icon {
+        width: 48px;
+        height: 48px;
+        font-size: 20px;
+    }
+
+    .metric-value {
+        font-size: 24px;
+    }
+
+    /* 2. DASHBOARD TABLE -> TRANSFORM INTO TOUCH CARDS ON MOBILE */
+    .data-table,
+    .data-table thead,
+    .data-table tbody,
+    .data-table th,
+    .data-table td,
+    .data-table tr {
+        display: block;
+    }
+
+    .data-table thead {
+        display: none; /* Hide standard headers on mobile */
+    }
+
+    .data-table tbody tr {
+        background: rgba(255, 255, 255, 0.03);
+        border: var(--border-glass);
+        border-radius: var(--radius-md);
+        padding: 14px 16px;
+        margin-bottom: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .data-table tbody tr:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .data-table tbody td {
+        padding: 0;
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 14px;
+    }
+
+    .data-table tbody td:first-child {
+        font-size: 15px;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+
+    .data-table tbody td:nth-child(2) {
+        order: 3;
+    }
+
+    .data-table tbody td:nth-child(3) {
+        order: 2;
+        font-size: 16px;
+    }
+
+    .data-table tbody td:nth-child(4) {
+        order: 4;
+        color: var(--text-muted);
+        font-size: 13px;
+    }
+
+    .data-table tbody td:nth-child(5) {
+        order: 1;
+        margin-bottom: 2px;
+    }
+
+    /* 3. SUBSCRIPTION CARDS GRID: 1 Column on Mobile */
+    .subscriptions-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+    }
+
+    .sub-card {
+        padding: 18px 16px;
+    }
+
+    /* 4. TOOLBAR & FILTERS: Stack on Mobile */
+    .section-toolbar {
+        flex-direction: column;
+        gap: 12px;
+        padding: 14px 16px;
+    }
+
+    .search-box {
+        width: 100%;
+    }
+
+    .filter-controls {
+        flex-direction: column;
+        width: 100%;
+        gap: 10px;
+    }
+
+    .form-select {
+        width: 100%;
+        min-height: 46px;
+        font-size: 15px;
+    }
+
+    /* 5. FORMS & INPUTS: Comfortable Touch Targets */
+    .form-container {
+        padding: 20px 16px;
+    }
+
     .form-grid {
         grid-template-columns: 1fr;
+        gap: 16px;
     }
+
     .form-group.full-width {
         grid-column: span 1;
     }
+
+    .form-control,
+    .form-select,
+    input[type="text"],
+    input[type="number"],
+    input[type="date"],
+    select,
+    textarea {
+        min-height: 48px;
+        font-size: 16px !important; /* Prevents auto-zoom in iOS Safari */
+        padding: 12px 14px;
+        border-radius: var(--radius-md);
+    }
+
+    /* 6. BUTTON TOUCH TARGETS & ACTIONS */
+    .btn {
+        min-height: 46px;
+        padding: 12px 20px;
+        font-size: 15px;
+        border-radius: var(--radius-md);
+    }
+
+    .btn-sm {
+        min-height: 40px;
+        padding: 8px 14px;
+        font-size: 13px;
+    }
+
+    .form-actions,
+    .modal-actions {
+        flex-direction: column-reverse;
+        gap: 10px;
+        width: 100%;
+    }
+
+    .form-actions button,
+    .modal-actions button {
+        width: 100%;
+        min-height: 48px;
+    }
+
+    .sub-card-actions {
+        gap: 8px;
+    }
+
+    .sub-card-actions .btn {
+        flex: 1;
+    }
+
+    /* 7. MODALS ON MOBILE */
+    .modal-dialog {
+        width: 95vw;
+        max-width: 95vw;
+        margin: auto;
+    }
+
+    .glass-modal .modal-content {
+        padding: 20px 16px;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    /* 8. CALCULATOR & NOTIFICATIONS */
+    .calc-item {
+        padding: 14px 12px;
+        min-height: 56px;
+    }
+
+    .calc-item-checkbox {
+        width: 22px;
+        height: 22px;
+    }
+
+    .notif-item {
+        padding: 14px 12px;
+        gap: 10px;
+    }
+
+    .toast-container {
+        bottom: 80px;
+        right: 12px;
+        left: 12px;
+    }
+
+    .toast {
+        width: 100%;
+    }
 }
+
