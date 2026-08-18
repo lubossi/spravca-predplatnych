@@ -83,6 +83,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         return String(text).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
     }
 
+    function normalizePaymentMethod(pm) {
+        if (!pm) return 'Platobná karta';
+        let str = String(pm).trim();
+        if (str.toLowerCase().includes('platebn') || str.toLowerCase().includes('platebna')) {
+            return 'Platobná karta';
+        }
+        return str;
+    }
+
     function dbToApp(row) {
         if (!row) return null;
         return {
@@ -91,7 +100,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             price: parseFloat(row.price) || 0,
             billingCycle: String(row.billing_cycle || row.billingCycle || 'monthly'),
             category: String(row.category || 'Iné'),
-            paymentMethod: String(row.payment_method || row.paymentMethod || 'Platobná karta'),
+            paymentMethod: normalizePaymentMethod(row.payment_method || row.paymentMethod || 'Platobná karta'),
             nextPaymentDate: String(row.next_payment_date || row.nextPaymentDate || getRelativeDate(30)),
             color: String(row.color || '#6366f1'),
             notes: String(row.notes || ''),
@@ -115,7 +124,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             price: parseFloat(sub.price) || 0,
             billing_cycle: (sub.billing_cycle === 'yearly' || sub.billingCycle === 'yearly') ? 'yearly' : 'monthly',
             category: String(sub.category || 'Iné').trim(),
-            payment_method: String(sub.payment_method || sub.paymentMethod || 'Platobná karta').trim(),
+            payment_method: normalizePaymentMethod(sub.payment_method || sub.paymentMethod || 'Platobná karta'),
             next_payment_date: String(sub.next_payment_date || sub.nextPaymentDate || getRelativeDate(30)),
             color: String(sub.color || '#6366f1'),
             notes: String(sub.notes || '').trim(),
@@ -794,7 +803,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         </div>
                         <div class="sub-card-title-group">
                             <div class="sub-card-icon" style="background-color:${sub.color||'#6366f1'}"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i></div>
-                            <div><h3 class="sub-card-name">${escapeHtml(sub.name)}</h3><span class="sub-card-price-cycle">${escapeHtml(sub.paymentMethod||'Platba')}</span></div>
+                            <div><h3 class="sub-card-name">${escapeHtml(sub.name)}</h3><span class="sub-card-price-cycle">${escapeHtml(normalizePaymentMethod(sub.paymentMethod))}</span></div>
                         </div>
                         <div style="margin-bottom:16px;"><span class="sub-card-price-tag">${formatMoney(sub.price)}</span><span class="sub-card-price-cycle">/${sub.billingCycle==='monthly'?'mesačne':'ročne'}</span></div>
                         <div class="sub-card-details">
@@ -834,7 +843,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <td><span class="sub-badge-category"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i> ${escapeHtml(sub.category)}</span></td>
                         <td><strong>${formatMoney(sub.price)}</strong> <small class="text-subtle">/${sub.billingCycle==='monthly'?'mes.':'rok'}</small></td>
                         <td><span class="badge badge-neutral">${sub.billingCycle==='monthly'?'Mesačne':'Ročne'}</span></td>
-                        <td><span class="text-subtle">${escapeHtml(sub.paymentMethod||'Platba')}</span></td>
+                        <td><span class="text-subtle">${escapeHtml(normalizePaymentMethod(sub.paymentMethod))}</span></td>
                         <td>${formatDateSK(sub.nextPaymentDate)}</td>
                         <td>${badgeHtml}</td>
                         <td style="text-align: right;">
@@ -1052,7 +1061,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const badgeClass = days === 0 ? 'badge-danger' : days <= 3 ? 'badge-warning' : 'badge-neutral';
             const div = document.createElement('div');
             div.className = 'notif-item';
-            div.innerHTML = `<div class="notif-left"><div class="notif-icon-badge" style="background-color:${sub.color||'#6366f1'}"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i></div><div class="notif-info"><h4>${escapeHtml(sub.name)}</h4><p>${escapeHtml(sub.category)} • ${sub.paymentMethod||'Platba'}</p></div></div><div class="notif-right"><div class="notif-price">${formatMoney(sub.price)}</div><span class="badge ${badgeClass}">${dayText}</span></div>`;
+            div.innerHTML = `<div class="notif-left"><div class="notif-icon-badge" style="background-color:${sub.color||'#6366f1'}"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i></div><div class="notif-info"><h4>${escapeHtml(sub.name)}</h4><p>${escapeHtml(sub.category)} • ${escapeHtml(normalizePaymentMethod(sub.paymentMethod))}</p></div></div><div class="notif-right"><div class="notif-price">${formatMoney(sub.price)}</div><span class="badge ${badgeClass}">${dayText}</span></div>`;
             container.appendChild(div);
         });
     }
@@ -1063,7 +1072,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('exportCsvBtn')?.addEventListener('click', () => {
         if (!subscriptions.length) { showToast('Nemáte žiadne dáta na export.', 'warning'); return; }
         let csv = '\uFEFF' + 'Názov služby;Suma (€);Frekvencia;Kategória;Spôsob platby;Dátum platby;Poznámka\n';
-        subscriptions.forEach(s => { csv += `"${s.name}";"${s.price}";"${s.billingCycle==='monthly'?'Mesačne':'Ročne'}";"${s.category}";"${s.paymentMethod||''}";"${s.nextPaymentDate}";"${(s.notes||'').replace(/;/g,',')}"\n`; });
+        subscriptions.forEach(s => { csv += `"${s.name}";"${s.price}";"${s.billingCycle==='monthly'?'Mesačne':'Ročne'}";"${s.category}";"${normalizePaymentMethod(s.paymentMethod)}";"${s.nextPaymentDate}";"${(s.notes||'').replace(/;/g,',')}"\n`; });
         const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
         const a = document.createElement('a');
         a.href = url; a.download = `predplatne_export_${new Date().toISOString().split('T')[0]}.csv`;
