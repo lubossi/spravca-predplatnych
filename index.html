@@ -276,11 +276,44 @@
                                 <option value="priceAsc">Zoradiť: Najlacnejšie</option>
                                 <option value="nameAsc">Zoradiť: Abecedne (A-Z)</option>
                             </select>
+
+                            <div class="view-mode-toggle" id="viewModeToggle" role="group" aria-label="Spôsob zobrazenia">
+                                <button type="button" class="view-toggle-btn active" id="viewGridBtn" data-mode="grid" title="Zobrazenie v kartách" aria-label="Karty">
+                                    <i class="fa-solid fa-table-cells-large"></i>
+                                </button>
+                                <button type="button" class="view-toggle-btn" id="viewTableBtn" data-mode="table" title="Riadkové zobrazenie (tabuľka)" aria-label="Riadky">
+                                    <i class="fa-solid fa-list"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
+                    <!-- 1. Grid/Cards View -->
                     <div class="subscriptions-grid" id="subscriptionsContainer">
                         <!-- Dynamic Cards JS -->
+                    </div>
+
+                    <!-- 2. Row/Table View -->
+                    <div class="dashboard-card glass-card hidden" id="subscriptionsTableWrapper">
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Služba</th>
+                                        <th>Kategória</th>
+                                        <th>Suma</th>
+                                        <th>Frekvencia</th>
+                                        <th>Spôsob platby</th>
+                                        <th>Dátum platby</th>
+                                        <th>Stav</th>
+                                        <th style="text-align: right;">Akcie</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="subscriptionsTableBody">
+                                    <!-- Dynamic Rows JS -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
 
                     <div class="empty-state glass-card hidden" id="subscriptionsEmpty">
@@ -662,6 +695,6 @@
     </nav>
 
     <!-- Application Script -->
-    <script src="app.js?v=20260817-13"></script>
+    <script src="app.js?v=20260818-1"></script>
 </body>
 </html>

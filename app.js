@@ -717,6 +717,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ============================================================
     //  2. ZOZNAM PREDPLATNÝCH
     // ============================================================
+    // ——— Subscriptions View Mode (Grid vs Table) ———
+    let subscriptionsViewMode = localStorage.getItem('spravca_subscriptions_view_mode') || 'grid';
+    const viewGridBtn = document.getElementById('viewGridBtn');
+    const viewTableBtn = document.getElementById('viewTableBtn');
+
+    function setSubscriptionsViewMode(mode) {
+        subscriptionsViewMode = mode;
+        localStorage.setItem('spravca_subscriptions_view_mode', mode);
+        updateViewModeToggleButtons();
+        renderSubscriptions();
+    }
+
+    function updateViewModeToggleButtons() {
+        viewGridBtn?.classList.toggle('active', subscriptionsViewMode === 'grid');
+        viewTableBtn?.classList.toggle('active', subscriptionsViewMode === 'table');
+    }
+
+    viewGridBtn?.addEventListener('click', () => setSubscriptionsViewMode('grid'));
+    viewTableBtn?.addEventListener('click', () => setSubscriptionsViewMode('table'));
+    updateViewModeToggleButtons();
+
     const searchInput = document.getElementById('searchInput');
     const categoryFilter = document.getElementById('categoryFilter');
     const sortBySelect = document.getElementById('sortBySelect');
@@ -743,41 +764,90 @@ document.addEventListener('DOMContentLoaded', async () => {
             return 0;
         });
 
-        const container = document.getElementById('subscriptionsContainer');
+        const gridContainer = document.getElementById('subscriptionsContainer');
+        const tableWrapper = document.getElementById('subscriptionsTableWrapper');
+        const tableBody = document.getElementById('subscriptionsTableBody');
         const emptyState = document.getElementById('subscriptionsEmpty');
-        if (!container) return;
-        container.innerHTML = '';
+
         if (filtered.length === 0) {
+            gridContainer?.classList.add('hidden');
+            tableWrapper?.classList.add('hidden');
             emptyState?.classList.remove('hidden');
             return;
         }
+
         emptyState?.classList.add('hidden');
 
-        filtered.forEach(sub => {
-            const days = getDaysUntil(sub.nextPaymentDate);
-            const card = document.createElement('div');
-            card.className = 'sub-card glass-card';
-            card.innerHTML = `
-                <div class="sub-card-top">
-                    <span class="sub-badge-category"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i> ${escapeHtml(sub.category)}</span>
-                    <span class="badge ${days <= 3 && days >= 0 ? 'badge-warning' : days < 0 ? 'badge-danger' : 'badge-neutral'}">${days === 0 ? 'Dnes' : days > 0 ? `O ${days} dní` : 'Po splatnosti'}</span>
-                </div>
-                <div class="sub-card-title-group">
-                    <div class="sub-card-icon" style="background-color:${sub.color||'#6366f1'}"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i></div>
-                    <div><h3 class="sub-card-name">${escapeHtml(sub.name)}</h3><span class="sub-card-price-cycle">${sub.paymentMethod||'Platba'}</span></div>
-                </div>
-                <div style="margin-bottom:16px;"><span class="sub-card-price-tag">${formatMoney(sub.price)}</span><span class="sub-card-price-cycle">/${sub.billingCycle==='monthly'?'mesačne':'ročne'}</span></div>
-                <div class="sub-card-details">
-                    <div class="sub-detail-row"><span class="sub-detail-label">Ďalšia platba:</span><span class="sub-detail-value">${formatDateSK(sub.nextPaymentDate)}</span></div>
-                    <div class="sub-detail-row"><span class="sub-detail-label">Ročné náklady:</span><span class="sub-detail-value">${formatMoney(sub.billingCycle==='monthly'?sub.price*12:sub.price)}</span></div>
-                    ${sub.notes ? `<div class="sub-detail-row"><span class="sub-detail-label">Poznámka:</span><span class="sub-detail-value text-truncate" title="${escapeHtml(sub.notes)}">${escapeHtml(sub.notes)}</span></div>` : ''}
-                </div>
-                <div class="sub-card-actions">
-                    <button class="btn btn-secondary btn-sm edit-sub-btn" data-id="${sub.id}"><i class="fa-solid fa-pen"></i> Upraviť</button>
-                    <button class="btn btn-danger-outline btn-sm delete-sub-btn" data-id="${sub.id}"><i class="fa-solid fa-trash"></i> Zmazať</button>
-                </div>`;
-            container.appendChild(card);
-        });
+        if (subscriptionsViewMode === 'grid') {
+            tableWrapper?.classList.add('hidden');
+            if (gridContainer) {
+                gridContainer.classList.remove('hidden');
+                gridContainer.innerHTML = '';
+                filtered.forEach(sub => {
+                    const days = getDaysUntil(sub.nextPaymentDate);
+                    const card = document.createElement('div');
+                    card.className = 'sub-card glass-card';
+                    card.innerHTML = `
+                        <div class="sub-card-top">
+                            <span class="sub-badge-category"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i> ${escapeHtml(sub.category)}</span>
+                            <span class="badge ${days <= 3 && days >= 0 ? 'badge-warning' : days < 0 ? 'badge-danger' : 'badge-neutral'}">${days === 0 ? 'Dnes' : days > 0 ? `O ${days} dní` : 'Po splatnosti'}</span>
+                        </div>
+                        <div class="sub-card-title-group">
+                            <div class="sub-card-icon" style="background-color:${sub.color||'#6366f1'}"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i></div>
+                            <div><h3 class="sub-card-name">${escapeHtml(sub.name)}</h3><span class="sub-card-price-cycle">${escapeHtml(sub.paymentMethod||'Platba')}</span></div>
+                        </div>
+                        <div style="margin-bottom:16px;"><span class="sub-card-price-tag">${formatMoney(sub.price)}</span><span class="sub-card-price-cycle">/${sub.billingCycle==='monthly'?'mesačne':'ročne'}</span></div>
+                        <div class="sub-card-details">
+                            <div class="sub-detail-row"><span class="sub-detail-label">Ďalšia platba:</span><span class="sub-detail-value">${formatDateSK(sub.nextPaymentDate)}</span></div>
+                            <div class="sub-detail-row"><span class="sub-detail-label">Ročné náklady:</span><span class="sub-detail-value">${formatMoney(sub.billingCycle==='monthly'?sub.price*12:sub.price)}</span></div>
+                            ${sub.notes ? `<div class="sub-detail-row"><span class="sub-detail-label">Poznámka:</span><span class="sub-detail-value text-truncate" title="${escapeHtml(sub.notes)}">${escapeHtml(sub.notes)}</span></div>` : ''}
+                        </div>
+                        <div class="sub-card-actions">
+                            <button class="btn btn-secondary btn-sm edit-sub-btn" data-id="${sub.id}"><i class="fa-solid fa-pen"></i> Upraviť</button>
+                            <button class="btn btn-danger-outline btn-sm delete-sub-btn" data-id="${sub.id}"><i class="fa-solid fa-trash"></i> Zmazať</button>
+                        </div>`;
+                    gridContainer.appendChild(card);
+                });
+            }
+        } else {
+            // Riadkové zobrazenie (Table View)
+            gridContainer?.classList.add('hidden');
+            if (tableWrapper && tableBody) {
+                tableWrapper.classList.remove('hidden');
+                tableBody.innerHTML = '';
+                filtered.forEach(sub => {
+                    const days = getDaysUntil(sub.nextPaymentDate);
+                    let badgeHtml = days < 0 ? `<span class="badge badge-danger">Po splatnosti</span>` : days === 0 ? `<span class="badge badge-danger">Dnes</span>` : days <= 3 ? `<span class="badge badge-warning">O ${days} dni</span>` : `<span class="badge badge-neutral">O ${days} dní</span>`;
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>
+                            <div class="sub-item-cell">
+                                <div class="sub-item-icon" style="background-color:${sub.color||'#6366f1'}">
+                                    <i class="fa-solid ${getCategoryIcon(sub.category)}"></i>
+                                </div>
+                                <div class="sub-item-title-group">
+                                    <span class="sub-item-name">${escapeHtml(sub.name)}</span>
+                                    ${sub.notes ? `<small class="text-subtle text-truncate" style="max-width: 180px;" title="${escapeHtml(sub.notes)}">${escapeHtml(sub.notes)}</small>` : ''}
+                                </div>
+                            </div>
+                        </td>
+                        <td><span class="sub-badge-category"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i> ${escapeHtml(sub.category)}</span></td>
+                        <td><strong>${formatMoney(sub.price)}</strong> <small class="text-subtle">/${sub.billingCycle==='monthly'?'mes.':'rok'}</small></td>
+                        <td><span class="badge badge-neutral">${sub.billingCycle==='monthly'?'Mesačne':'Ročne'}</span></td>
+                        <td><span class="text-subtle">${escapeHtml(sub.paymentMethod||'Platba')}</span></td>
+                        <td>${formatDateSK(sub.nextPaymentDate)}</td>
+                        <td>${badgeHtml}</td>
+                        <td style="text-align: right;">
+                            <div class="table-actions">
+                                <button class="btn btn-secondary btn-xs edit-sub-btn" data-id="${sub.id}" title="Upraviť"><i class="fa-solid fa-pen"></i></button>
+                                <button class="btn btn-danger-outline btn-xs delete-sub-btn" data-id="${sub.id}" title="Zmazať"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </td>
+                    `;
+                    tableBody.appendChild(tr);
+                });
+            }
+        }
 
         document.querySelectorAll('.edit-sub-btn').forEach(btn => btn.addEventListener('click', () => openEditModal(btn.dataset.id)));
         document.querySelectorAll('.delete-sub-btn').forEach(btn => btn.addEventListener('click', () => openDeleteModal(btn.dataset.id)));

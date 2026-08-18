@@ -747,6 +747,7 @@ body::after {
 
 .filter-controls {
     display: flex;
+    align-items: center;
     gap: 12px;
 }
 
@@ -763,6 +764,62 @@ body::after {
 
 .form-select option {
     background: var(--bg-dark);
+    color: var(--text-main);
+}
+
+/* View Mode Toggle (Grid vs Table) */
+.view-mode-toggle {
+    display: inline-flex;
+    align-items: center;
+    background: var(--bg-glass-input);
+    border: var(--border-glass);
+    border-radius: var(--radius-md);
+    padding: 3px;
+    gap: 3px;
+}
+
+.view-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.view-toggle-btn:hover:not(.active) {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.view-toggle-btn.active {
+    background: var(--primary);
+    color: #fff;
+    box-shadow: 0 2px 8px var(--primary-glow);
+}
+
+.table-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.sub-item-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.sub-item-title-group .sub-item-name {
+    font-weight: 600;
     color: var(--text-main);
 }
 
