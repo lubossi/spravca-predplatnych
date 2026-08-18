@@ -826,27 +826,33 @@ document.addEventListener('DOMContentLoaded', async () => {
                 tableBody.innerHTML = '';
                 filtered.forEach(sub => {
                     const days = getDaysUntil(sub.nextPaymentDate);
-                    let badgeHtml = days < 0 ? `<span class="badge badge-danger">Po splatnosti</span>` : days === 0 ? `<span class="badge badge-danger">Dnes</span>` : days <= 3 ? `<span class="badge badge-warning">O ${days} dni</span>` : `<span class="badge badge-neutral">O ${days} dní</span>`;
+                    const dayLabel = days < 0 ? 'Po splatnosti' : days === 0 ? 'Dnes' : `O ${days} dní`;
+                    const dayBadgeClass = days < 0 ? 'badge-danger' : days <= 3 ? 'badge-warning' : 'badge-neutral';
+                    const badgeHtml = `<span class="badge ${dayBadgeClass}">${dayLabel}</span>`;
                     const tr = document.createElement('tr');
+                    tr.className = 'sub-table-row';
                     tr.innerHTML = `
-                        <td>
+                        <td class="td-cell-main">
                             <div class="sub-item-cell">
                                 <div class="sub-item-icon" style="background-color:${sub.color||'#6366f1'}">
                                     <i class="fa-solid ${getCategoryIcon(sub.category)}"></i>
                                 </div>
                                 <div class="sub-item-title-group">
                                     <span class="sub-item-name">${escapeHtml(sub.name)}</span>
-                                    ${sub.notes ? `<small class="text-subtle text-truncate" style="max-width: 180px;" title="${escapeHtml(sub.notes)}">${escapeHtml(sub.notes)}</small>` : ''}
+                                    <span class="sub-item-mobile-sub text-subtle">
+                                        ${formatDateSK(sub.nextPaymentDate)} • <span class="sub-days-tag ${days < 0 ? 'text-danger' : days <= 3 ? 'text-warning' : ''}">${dayLabel}</span>
+                                    </span>
+                                    ${sub.notes ? `<small class="text-subtle text-truncate sub-item-notes" style="max-width: 180px;" title="${escapeHtml(sub.notes)}">${escapeHtml(sub.notes)}</small>` : ''}
                                 </div>
                             </div>
                         </td>
-                        <td><span class="sub-badge-category"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i> ${escapeHtml(sub.category)}</span></td>
-                        <td><strong>${formatMoney(sub.price)}</strong> <small class="text-subtle">/${sub.billingCycle==='monthly'?'mes.':'rok'}</small></td>
-                        <td><span class="badge badge-neutral">${sub.billingCycle==='monthly'?'Mesačne':'Ročne'}</span></td>
-                        <td><span class="text-subtle">${escapeHtml(normalizePaymentMethod(sub.paymentMethod))}</span></td>
-                        <td>${formatDateSK(sub.nextPaymentDate)}</td>
-                        <td>${badgeHtml}</td>
-                        <td style="text-align: right;">
+                        <td class="td-cell-category"><span class="sub-badge-category"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i> ${escapeHtml(sub.category)}</span></td>
+                        <td class="td-cell-price"><strong>${formatMoney(sub.price)}</strong> <small class="text-subtle">/${sub.billingCycle==='monthly'?'mes.':'rok'}</small></td>
+                        <td class="td-cell-cycle"><span class="badge badge-neutral">${sub.billingCycle==='monthly'?'Mesačne':'Ročne'}</span></td>
+                        <td class="td-cell-method"><span class="text-subtle">${escapeHtml(normalizePaymentMethod(sub.paymentMethod))}</span></td>
+                        <td class="td-cell-date">${formatDateSK(sub.nextPaymentDate)}</td>
+                        <td class="td-cell-status">${badgeHtml}</td>
+                        <td class="td-cell-actions" style="text-align: right;">
                             <div class="table-actions">
                                 <button class="btn btn-secondary btn-xs edit-sub-btn" data-id="${sub.id}" title="Upraviť"><i class="fa-solid fa-pen"></i></button>
                                 <button class="btn btn-danger-outline btn-xs delete-sub-btn" data-id="${sub.id}" title="Zmazať"><i class="fa-solid fa-trash"></i></button>
