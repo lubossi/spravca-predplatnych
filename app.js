@@ -41,12 +41,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const STORAGE_KEY = 'spravca_predplatnych_data';
 
     const DEMO_SUBSCRIPTIONS = [
-        { id: 'sub_demo_1', name: 'Netflix Premium', price: 17.99, billingCycle: 'monthly', category: 'Zábava', paymentMethod: 'Platebná karta', nextPaymentDate: getRelativeDate(3), color: '#e50914', notes: '4K Ultra HD rodinné konto', active: true },
+        { id: 'sub_demo_1', name: 'Netflix Premium', price: 17.99, billingCycle: 'monthly', category: 'Zábava', paymentMethod: 'Platobná karta', nextPaymentDate: getRelativeDate(3), color: '#e50914', notes: '4K Ultra HD rodinné konto', active: true },
         { id: 'sub_demo_2', name: 'Spotify Family', price: 10.99, billingCycle: 'monthly', category: 'Zábava', paymentMethod: 'PayPal', nextPaymentDate: getRelativeDate(11), color: '#1db954', notes: 'Pre 6 členov rodiny', active: true },
         { id: 'sub_demo_3', name: 'Optický Internet Telekom', price: 22.90, billingCycle: 'monthly', category: 'Domácnosť', paymentMethod: 'Bankový prevod', nextPaymentDate: getRelativeDate(1), color: '#e20074', notes: 'Rýchlosť 500/50 Mbps', active: true },
-        { id: 'sub_demo_4', name: 'Posilňovňa GymBeam', price: 29.00, billingCycle: 'monthly', category: 'Zdravie', paymentMethod: 'Platebná karta', nextPaymentDate: getRelativeDate(6), color: '#f59e0b', notes: 'Mesačné členstvo bez viazanosti', active: true },
+        { id: 'sub_demo_4', name: 'Posilňovňa GymBeam', price: 29.00, billingCycle: 'monthly', category: 'Zdravie', paymentMethod: 'Platobná karta', nextPaymentDate: getRelativeDate(6), color: '#f59e0b', notes: 'Mesačné členstvo bez viazanosti', active: true },
         { id: 'sub_demo_5', name: 'ChatGPT Plus (OpenAI)', price: 20.00, billingCycle: 'monthly', category: 'Nástroje', paymentMethod: 'Apple Pay', nextPaymentDate: getRelativeDate(18), color: '#10a37f', notes: 'GPT-4o a generovanie obrázkov', active: true },
-        { id: 'sub_demo_6', name: 'Adobe Creative Cloud', price: 380.00, billingCycle: 'yearly', category: 'Práca', paymentMethod: 'Platebná karta', nextPaymentDate: getRelativeDate(45), color: '#ff0000', notes: 'Ročné predplatné pre grafiku', active: true },
+        { id: 'sub_demo_6', name: 'Adobe Creative Cloud', price: 380.00, billingCycle: 'yearly', category: 'Práca', paymentMethod: 'Platobná karta', nextPaymentDate: getRelativeDate(45), color: '#ff0000', notes: 'Ročné predplatné pre grafiku', active: true },
         { id: 'sub_demo_7', name: 'iCloud+ 200GB', price: 2.99, billingCycle: 'monthly', category: 'Nástroje', paymentMethod: 'Apple Pay', nextPaymentDate: getRelativeDate(2), color: '#3b82f6', notes: 'Zálohovanie fotiek a iPhone', active: true }
     ];
 
@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             price: parseFloat(row.price) || 0,
             billingCycle: String(row.billing_cycle || row.billingCycle || 'monthly'),
             category: String(row.category || 'Iné'),
-            paymentMethod: String(row.payment_method || row.paymentMethod || 'Platebná karta'),
+            paymentMethod: String(row.payment_method || row.paymentMethod || 'Platobná karta'),
             nextPaymentDate: String(row.next_payment_date || row.nextPaymentDate || getRelativeDate(30)),
             color: String(row.color || '#6366f1'),
             notes: String(row.notes || ''),
@@ -115,7 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             price: parseFloat(sub.price) || 0,
             billing_cycle: (sub.billing_cycle === 'yearly' || sub.billingCycle === 'yearly') ? 'yearly' : 'monthly',
             category: String(sub.category || 'Iné').trim(),
-            payment_method: String(sub.payment_method || sub.paymentMethod || 'Platebná karta').trim(),
+            payment_method: String(sub.payment_method || sub.paymentMethod || 'Platobná karta').trim(),
             next_payment_date: String(sub.next_payment_date || sub.nextPaymentDate || getRelativeDate(30)),
             color: String(sub.color || '#6366f1'),
             notes: String(sub.notes || '').trim(),
@@ -899,7 +899,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('editSubPrice').value = sub.price;
         document.getElementById('editSubBillingCycle').value = sub.billingCycle;
         document.getElementById('editSubCategory').value = sub.category;
-        document.getElementById('editSubPaymentMethod').value = sub.paymentMethod || 'Platebná karta';
+        document.getElementById('editSubPaymentMethod').value = sub.paymentMethod || 'Platobná karta';
         document.getElementById('editSubNextPaymentDate').value = sub.nextPaymentDate;
         document.getElementById('editSubColor').value = sub.color || '#6366f1';
         document.getElementById('editSubNotes').value = sub.notes || '';

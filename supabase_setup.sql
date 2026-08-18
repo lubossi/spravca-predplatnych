@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     price NUMERIC(10, 2) NOT NULL DEFAULT 0,
     billing_cycle TEXT NOT NULL DEFAULT 'monthly' CHECK (billing_cycle IN ('monthly', 'yearly')),
     category TEXT NOT NULL DEFAULT 'Iné',
-    payment_method TEXT DEFAULT 'Platebná karta',
+    payment_method TEXT DEFAULT 'Platobná karta',
     next_payment_date DATE NOT NULL,
     color TEXT DEFAULT '#6366f1',
     notes TEXT DEFAULT '',
