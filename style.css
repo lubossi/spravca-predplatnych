@@ -188,7 +188,7 @@ body::after {
 }
 
 .sidebar-author-badge {
-    display: inline-flex;
+    display: none; /* Skryté na PC pod logom */
     align-items: center;
     gap: 6px;
     font-size: 11px;
@@ -1809,6 +1809,14 @@ body::after {
 
     .close-sidebar-btn {
         display: block;
+    }
+
+    .sidebar-author-badge {
+        display: inline-flex; /* Zobrazené na mobile pod logom */
+    }
+
+    .sidebar-copyright {
+        display: none; /* Skryté na mobile v pätke menu */
     }
 
     .main-wrapper {
