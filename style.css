@@ -1711,13 +1711,47 @@ body::after {
 }
 
 @media (max-width: 768px) {
-    body {
-        padding-bottom: calc(74px + env(safe-area-inset-bottom));
+    html, body {
+        overflow-x: hidden;
+        width: 100%;
+        max-width: 100vw;
     }
 
-    /* Bottom Navigation Active */
+    body {
+        padding-bottom: calc(70px + env(safe-area-inset-bottom));
+    }
+
+    /* Bottom Navigation Active & Responsive */
     .bottom-nav {
         display: flex;
+        padding: 4px 2px calc(4px + env(safe-area-inset-bottom));
+        height: auto;
+    }
+
+    .bottom-nav-item {
+        padding: 4px 2px;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .bottom-nav-item span {
+        font-size: 10px;
+        letter-spacing: -0.02em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+
+    .bottom-nav-icon {
+        font-size: 17px;
+    }
+
+    .bottom-nav-add .add-btn-circle {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+        margin-top: -10px;
     }
 
     /* Hide Sidebar by default */
@@ -1741,32 +1775,100 @@ body::after {
     .main-wrapper {
         margin-left: 0;
         width: 100%;
+        max-width: 100vw;
+        overflow-x: hidden;
     }
 
     .mobile-toggle-btn {
         display: flex;
-        min-width: 44px;
-        min-height: 44px;
+        min-width: 38px;
+        width: 38px;
+        height: 38px;
         align-items: center;
         justify-content: center;
+        font-size: 16px;
+        flex-shrink: 0;
     }
 
     .top-header {
-        padding: 0 16px;
-        height: 64px;
+        padding: 0 12px;
+        height: 58px;
+        gap: 8px;
+        width: 100%;
+        max-width: 100vw;
+        box-sizing: border-box;
+    }
+
+    .header-left {
+        gap: 8px;
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
     }
 
     .page-title {
-        font-size: 18px;
+        font-size: 16px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
     }
 
     .storage-status-badge {
         font-size: 11px;
-        padding: 4px 8px;
+        padding: 4px 6px;
+        margin-left: 2px;
+        flex-shrink: 0;
+    }
+    .storage-status-badge span {
+        display: none; /* Hide text on mobile, keep clean icon */
+    }
+
+    .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+    }
+
+    /* Hide redundant desktop "+ Nové predplatné" button in top header on mobile */
+    #quickAddBtn {
+        display: none !important;
+    }
+
+    /* Compact User Auth Badge on Mobile */
+    .user-auth-badge {
+        padding: 4px 6px;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .user-auth-badge .user-email-text {
+        display: none;
+    }
+
+    .user-auth-badge .logout-btn {
+        padding: 4px 6px;
+        min-height: 28px;
+        font-size: 12px;
+    }
+
+    .user-auth-badge .logout-btn .btn-text {
+        display: none;
+    }
+
+    .login-btn {
+        padding: 6px 10px;
+        min-height: 32px;
+        font-size: 12px;
+    }
+
+    .login-btn span {
+        display: none;
     }
 
     .content-body {
-        padding: 16px 12px;
+        padding: 14px 10px;
     }
 
     /* 1. METRICS GRID: Stack in 1 Column on Mobile */
