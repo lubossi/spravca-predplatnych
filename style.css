@@ -180,6 +180,33 @@ body::after {
     color: var(--primary);
 }
 
+.sidebar-brand-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.sidebar-author-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    letter-spacing: 0.01em;
+    width: fit-content;
+}
+
+.sidebar-author-badge i {
+    color: var(--primary);
+    font-size: 11px;
+}
+
 .close-sidebar-btn {
     display: none;
     background: none;
@@ -263,6 +290,14 @@ body::after {
     font-size: 20px;
     font-weight: 700;
     color: var(--success);
+}
+
+.sidebar-copyright {
+    margin-top: 14px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-subtle);
+    letter-spacing: 0.02em;
 }
 
 /* Sidebar Overlay for Mobile */

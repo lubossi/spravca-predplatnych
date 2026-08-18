@@ -28,7 +28,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=20260818-6">
+    <link rel="stylesheet" href="style.css?v=20260818-7">
 
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -41,13 +41,18 @@
         <!-- Sidebar Navigation -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <div class="logo">
-                    <div class="logo-icon">
-                        <i class="fa-solid fa-wallet"></i>
+                <div class="sidebar-brand-wrapper">
+                    <div class="logo">
+                        <div class="logo-icon">
+                            <i class="fa-solid fa-wallet"></i>
+                        </div>
+                        <div class="logo-text">
+                            <h2>Správca</h2>
+                            <span>predplatných</span>
+                        </div>
                     </div>
-                    <div class="logo-text">
-                        <h2>Správca</h2>
-                        <span>predplatných</span>
+                    <div class="sidebar-author-badge">
+                        <i class="fa-solid fa-code"></i> Navrhol Ľuboš Ľupták • 2026
                     </div>
                 </div>
                 <button class="close-sidebar-btn" id="closeSidebarBtn" aria-label="Zatvoriť menu">
@@ -115,6 +120,9 @@
                 <div class="mini-summary">
                     <span class="mini-summary-label">Mesačné výdavky</span>
                     <strong class="mini-summary-value" id="sidebarMonthlyTotal">0,00 €</strong>
+                </div>
+                <div class="sidebar-copyright">
+                    © 2026 • Navrhol Ľuboš Ľupták
                 </div>
             </div>
         </aside>
@@ -705,6 +713,6 @@
     </nav>
 
     <!-- Application Script -->
-    <script src="app.js?v=20260818-6"></script>
+    <script src="app.js?v=20260818-7"></script>
 </body>
 </html>
