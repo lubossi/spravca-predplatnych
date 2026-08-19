@@ -28,7 +28,23 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=20260818-8">
+    <link rel="stylesheet" href="style.css?v=20260819-1">
+
+    <!-- Immediate Theme Initialization (Prevents FOUC) -->
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem('spravca_theme_preference') || 'system';
+                let eff = saved;
+                if (saved === 'system') {
+                    eff = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+                }
+                document.documentElement.setAttribute('data-theme', eff);
+                const meta = document.querySelector('meta[name="theme-color"]');
+                if (meta) meta.setAttribute('content', eff === 'light' ? '#f8fafc' : '#0f172a');
+            } catch (e) {}
+        })();
+    </script>
 
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -103,6 +119,24 @@
             </nav>
 
             <div class="sidebar-footer">
+                <!-- Theme Switcher -->
+                <div class="theme-switcher-container">
+                    <span class="theme-switcher-label"><i class="fa-solid fa-circle-half-stroke"></i> Motív vzhľadu</span>
+                    <div class="theme-segmented-control" id="themeSegmentedControl">
+                        <button type="button" class="theme-option-btn" data-theme-value="light" title="Svetlý motív">
+                            <i class="fa-solid fa-sun"></i>
+                            <span>Svetlý</span>
+                        </button>
+                        <button type="button" class="theme-option-btn active" data-theme-value="dark" title="Tmavý motív">
+                            <i class="fa-solid fa-moon"></i>
+                            <span>Tmavý</span>
+                        </button>
+                        <button type="button" class="theme-option-btn" data-theme-value="system" title="Podľa systému">
+                            <i class="fa-solid fa-desktop"></i>
+                            <span>Auto</span>
+                        </button>
+                    </div>
+                </div>
                 <div class="sidebar-user-section hidden" id="sidebarUserSection">
                     <div class="sidebar-user-info">
                         <i class="fa-solid fa-circle-user"></i>
@@ -713,6 +747,6 @@
     </nav>
 
     <!-- Application Script -->
-    <script src="app.js?v=20260818-8"></script>
+    <script src="app.js?v=20260819-1"></script>
 </body>
 </html>

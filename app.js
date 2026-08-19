@@ -39,6 +39,62 @@ document.addEventListener('DOMContentLoaded', async () => {
     let realtimeChannel = null;
 
     const STORAGE_KEY = 'spravca_predplatnych_data';
+    const THEME_STORAGE_KEY = 'spravca_theme_preference';
+
+    // ============================================================
+    //  SPRÁVCA MOTÍVOV VZHĽADU (Light / Dark / System)
+    // ============================================================
+    function applyTheme(themePref) {
+        let effectiveTheme = themePref;
+        if (themePref === 'system') {
+            effectiveTheme = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        }
+        document.documentElement.setAttribute('data-theme', effectiveTheme);
+
+        document.querySelectorAll('.theme-option-btn').forEach(btn => {
+            if (btn.dataset.themeValue === themePref) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+        if (metaThemeColor) {
+            metaThemeColor.setAttribute('content', effectiveTheme === 'light' ? '#f8fafc' : '#0f172a');
+        }
+    }
+
+    function setTheme(themePref) {
+        try {
+            localStorage.setItem(THEME_STORAGE_KEY, themePref);
+        } catch (e) {}
+        applyTheme(themePref);
+    }
+
+    function initTheme() {
+        const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) || 'system';
+        applyTheme(savedTheme);
+
+        if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                const currentPref = localStorage.getItem(THEME_STORAGE_KEY) || 'system';
+                if (currentPref === 'system') {
+                    applyTheme('system');
+                }
+            });
+        }
+
+        document.querySelectorAll('.theme-option-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const val = btn.dataset.themeValue;
+                if (val) setTheme(val);
+            });
+        });
+    }
+
+    initTheme();
 
     const DEMO_SUBSCRIPTIONS = [
         { id: 'sub_demo_1', name: 'Netflix Premium', price: 17.99, billingCycle: 'monthly', category: 'Zábava', paymentMethod: 'Platobná karta', nextPaymentDate: getRelativeDate(3), color: '#e50914', notes: '4K Ultra HD rodinné konto', active: true },
