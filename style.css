@@ -413,6 +413,9 @@ body::after {
     flex: 1;
     padding: 20px 12px;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
 .sidebar-nav ul {
@@ -459,16 +462,11 @@ body::after {
     color: var(--primary);
 }
 
-.sidebar-footer {
-    padding: 20px;
-    border-top: var(--border-glass);
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-}
-
-/* Theme Switcher */
+/* Theme Switcher inside Scrollable Nav */
 .theme-switcher-container {
+    padding: 14px 4px 0 4px;
+    border-top: var(--border-glass);
+    margin-top: 4px;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -530,6 +528,14 @@ body::after {
     background: #ffffff;
     color: #4f46e5;
     box-shadow: 0 2px 6px rgba(15, 23, 42, 0.1);
+}
+
+.sidebar-footer {
+    padding: 20px;
+    border-top: var(--border-glass);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .mini-summary {
