@@ -134,6 +134,73 @@ document.addEventListener('DOMContentLoaded', async () => {
         return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
     }
 
+    function advanceDateToNextCycle(dateString, billingCycle) {
+        if (!dateString) return getRelativeDate(30);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const parts = dateString.split('-').map(Number);
+        if (parts.length !== 3 || parts.some(isNaN)) return dateString;
+
+        const [origYear, origMonth, origDay] = parts;
+        let target = new Date(origYear, origMonth - 1, origDay);
+        target.setHours(0, 0, 0, 0);
+
+        // Ak je dátum dnes alebo v budúcnosti, netreba ho posúvať
+        if (target >= today) {
+            return dateString;
+        }
+
+        const cycle = String(billingCycle || 'monthly').toLowerCase();
+        let curYear = origYear;
+        let curMonth = origMonth; // 1-12
+        let day = origDay;
+
+        function getDaysInMonth(y, m) {
+            if ([1, 3, 5, 7, 8, 10, 12].includes(m)) return 31;
+            if ([4, 6, 9, 11].includes(m)) return 30;
+            return (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)) ? 29 : 28;
+        }
+
+        let iterations = 0;
+        while (target < today && iterations < 1200) {
+            iterations++;
+            if (cycle === 'yearly' || cycle === 'ročne' || cycle === 'rocne') {
+                curYear += 1;
+                const maxD = getDaysInMonth(curYear, curMonth);
+                target = new Date(curYear, curMonth - 1, Math.min(day, maxD));
+            } else if (cycle === 'quarterly' || cycle === 'štvrťročne' || cycle === 'stvrtrocne') {
+                curMonth += 3;
+                if (curMonth > 12) {
+                    curYear += Math.floor((curMonth - 1) / 12);
+                    curMonth = ((curMonth - 1) % 12) + 1;
+                }
+                const maxD = getDaysInMonth(curYear, curMonth);
+                target = new Date(curYear, curMonth - 1, Math.min(day, maxD));
+            } else if (cycle === 'weekly' || cycle === 'týždenne' || cycle === 'tyzdenne') {
+                target.setDate(target.getDate() + 7);
+                curYear = target.getFullYear();
+                curMonth = target.getMonth() + 1;
+                day = target.getDate();
+            } else {
+                // Predvolené: mesačne
+                curMonth += 1;
+                if (curMonth > 12) {
+                    curYear += Math.floor((curMonth - 1) / 12);
+                    curMonth = ((curMonth - 1) % 12) + 1;
+                }
+                const maxD = getDaysInMonth(curYear, curMonth);
+                target = new Date(curYear, curMonth - 1, Math.min(day, maxD));
+            }
+            target.setHours(0, 0, 0, 0);
+        }
+
+        const y = target.getFullYear();
+        const m = String(target.getMonth() + 1).padStart(2, '0');
+        const d = String(target.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
     function escapeHtml(text) {
         if (!text) return '';
         return String(text).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
@@ -685,6 +752,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function updateAllViews() {
+        // Automaticky posuň dátumy predplatných, ktorých platba už prebehla
+        let anyAdvanced = false;
+        const subsToUpdate = [];
+        subscriptions = subscriptions.map(sub => {
+            const nextDate = advanceDateToNextCycle(sub.nextPaymentDate, sub.billingCycle);
+            if (nextDate !== sub.nextPaymentDate) {
+                anyAdvanced = true;
+                const updated = { ...sub, nextPaymentDate: nextDate };
+                subsToUpdate.push(updated);
+                return updated;
+            }
+            return sub;
+        });
+
+        if (anyAdvanced) {
+            syncToLocalStorage();
+            if (currentUser && storageMode === 'supabase') {
+                for (const sub of subsToUpdate) {
+                    updateInSupabase(sub).catch(err => console.warn('Supabase auto-advance sync error:', err));
+                }
+            }
+        }
+
         const { monthlyTotal } = getTotals();
         const sidebarTotal = document.getElementById('sidebarMonthlyTotal');
         if (sidebarTotal) sidebarTotal.textContent = formatMoney(monthlyTotal);
@@ -716,7 +806,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (nxtSub) {
                 if (days === 0) { nxtSub.textContent = 'Splatné dnes!'; nxtSub.style.color = 'var(--danger)'; }
                 else if (days === 1) { nxtSub.textContent = 'Splatné zajtra!'; nxtSub.style.color = 'var(--warning)'; }
-                else if (days < 0) { nxtSub.textContent = `Po splatnosti (${Math.abs(days)} dní)`; nxtSub.style.color = 'var(--danger)'; }
                 else { nxtSub.textContent = `O ${days} dní (${formatDateSK(nearest.nextPaymentDate)})`; nxtSub.style.color = 'var(--text-subtle)'; }
             }
         } else {
@@ -749,7 +838,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 emptyEl?.classList.add('hidden');
                 sorted.slice(0, 5).forEach(sub => {
                     const days = getDaysUntil(sub.nextPaymentDate);
-                    let badgeHtml = days < 0 ? `<span class="badge badge-danger">Po splatnosti</span>` : days === 0 ? `<span class="badge badge-danger">Dnes</span>` : days <= 3 ? `<span class="badge badge-warning">O ${days} dni</span>` : `<span class="badge badge-neutral">O ${days} dní</span>`;
+                    let badgeHtml = days === 0 ? `<span class="badge badge-danger">Dnes</span>` : days <= 3 ? `<span class="badge badge-warning">O ${days} dni</span>` : `<span class="badge badge-neutral">O ${days} dní</span>`;
                     const tr = document.createElement('tr');
                     tr.innerHTML = `<td><div class="sub-item-cell"><div class="sub-item-icon" style="background-color:${sub.color||'#6366f1'}"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i></div><span>${escapeHtml(sub.name)}</span></div></td><td><span class="sub-badge-category">${escapeHtml(sub.category)}</span></td><td><strong>${formatMoney(sub.price)}</strong> <small class="text-subtle">/${sub.billingCycle==='monthly'?'mes.':'rok'}</small></td><td>${formatDateSK(sub.nextPaymentDate)}</td><td>${badgeHtml}</td>`;
                     tbody.appendChild(tr);
@@ -850,12 +939,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 gridContainer.innerHTML = '';
                 filtered.forEach(sub => {
                     const days = getDaysUntil(sub.nextPaymentDate);
+                    const dayBadgeClass = days === 0 ? 'badge-danger' : days <= 3 ? 'badge-warning' : 'badge-neutral';
+                    const dayLabel = days === 0 ? 'Dnes' : days === 1 ? 'Zajtra' : `O ${days} dní`;
                     const card = document.createElement('div');
                     card.className = 'sub-card glass-card';
                     card.innerHTML = `
                         <div class="sub-card-top">
                             <span class="sub-badge-category"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i> ${escapeHtml(sub.category)}</span>
-                            <span class="badge ${days <= 3 && days >= 0 ? 'badge-warning' : days < 0 ? 'badge-danger' : 'badge-neutral'}">${days === 0 ? 'Dnes' : days > 0 ? `O ${days} dní` : 'Po splatnosti'}</span>
+                            <span class="badge ${dayBadgeClass}">${dayLabel}</span>
                         </div>
                         <div class="sub-card-title-group">
                             <div class="sub-card-icon" style="background-color:${sub.color||'#6366f1'}"><i class="fa-solid ${getCategoryIcon(sub.category)}"></i></div>
@@ -882,8 +973,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 tableBody.innerHTML = '';
                 filtered.forEach(sub => {
                     const days = getDaysUntil(sub.nextPaymentDate);
-                    const dayLabel = days < 0 ? 'Po splatnosti' : days === 0 ? 'Dnes' : `O ${days} dní`;
-                    const dayBadgeClass = days < 0 ? 'badge-danger' : days <= 3 ? 'badge-warning' : 'badge-neutral';
+                    const dayLabel = days === 0 ? 'Dnes' : days === 1 ? 'Zajtra' : `O ${days} dní`;
+                    const dayBadgeClass = days === 0 ? 'badge-danger' : days <= 3 ? 'badge-warning' : 'badge-neutral';
                     const badgeHtml = `<span class="badge ${dayBadgeClass}">${dayLabel}</span>`;
                     const tr = document.createElement('tr');
                     tr.className = 'sub-table-row';
@@ -896,7 +987,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 <div class="sub-item-title-group">
                                     <span class="sub-item-name">${escapeHtml(sub.name)}</span>
                                     <span class="sub-item-mobile-sub text-subtle">
-                                        ${formatDateSK(sub.nextPaymentDate)} • <span class="sub-days-tag ${days < 0 ? 'text-danger' : days <= 3 ? 'text-warning' : ''}">${dayLabel}</span>
+                                        ${formatDateSK(sub.nextPaymentDate)} • <span class="sub-days-tag ${days === 0 ? 'text-danger' : days <= 3 ? 'text-warning' : ''}">${dayLabel}</span>
                                     </span>
                                     ${sub.notes ? `<small class="text-subtle text-truncate sub-item-notes" style="max-width: 180px;" title="${escapeHtml(sub.notes)}">${escapeHtml(sub.notes)}</small>` : ''}
                                 </div>
