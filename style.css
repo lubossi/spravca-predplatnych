@@ -1637,14 +1637,25 @@ body::after {
     flex: 1;
 }
 
+.export-card > .btn {
+    width: 100%;
+}
+
 .export-btn-group {
     display: flex;
+    flex-direction: column;
     gap: 10px;
     width: 100%;
 }
 
-.export-btn-group label, .export-btn-group button {
-    flex: 1;
+.export-btn-group label,
+.export-btn-group button,
+.export-btn-group .btn {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
 }
 
 /* MODAL DIALOGS */
