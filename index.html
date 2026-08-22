@@ -28,7 +28,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=20260822-1">
+    <link rel="stylesheet" href="style.css?v=20260822-2">
 
     <!-- Immediate Theme Initialization (Prevents FOUC) -->
     <script>
@@ -88,6 +88,12 @@
                         <a href="#subscriptions" class="nav-link" data-view="subscriptions">
                             <i class="fa-solid fa-list-check"></i>
                             <span>Moje predplatné</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#history" class="nav-link" data-view="history">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                            <span>História platieb</span>
                         </a>
                     </li>
                     <li>
@@ -575,9 +581,174 @@
                         </div>
                     </div>
                 </section>
+
+                <!-- VIEW 7: HISTÓRIA PLATIEB A VÝVOJ VÝDAVKOV -->
+                <section class="view-section" id="view-history">
+                    <!-- Top Summary Stats -->
+                    <div class="stats-grid history-stats-grid">
+                        <div class="stat-card glass-card">
+                            <div class="stat-icon icon-primary"><i class="fa-solid fa-receipt"></i></div>
+                            <div class="stat-content">
+                                <span class="stat-label" id="historyYearTotalLabel">Zaplatené v roku 2026</span>
+                                <h3 class="stat-value" id="historyYearTotal">0,00 €</h3>
+                                <span class="stat-subtext text-subtle" id="historyPaymentsCount">0 zrealizovaných platieb</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card glass-card">
+                            <div class="stat-icon icon-accent"><i class="fa-solid fa-arrow-trend-up"></i></div>
+                            <div class="stat-content">
+                                <span class="stat-label">Medziročný trend</span>
+                                <h3 class="stat-value" id="historyTrendValue">0,00 €</h3>
+                                <span class="stat-subtext" id="historyTrendSubtext">Porovnanie s rokom 2025</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card glass-card">
+                            <div class="stat-icon icon-emerald"><i class="fa-solid fa-calendar-check"></i></div>
+                            <div class="stat-content">
+                                <span class="stat-label">Mesačný priemer</span>
+                                <h3 class="stat-value" id="historyMonthlyAvg">0,00 €</h3>
+                                <span class="stat-subtext text-subtle" id="historyActiveMonths">v aktívnych mesiacoch</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Annual Monthly Spending Chart Card -->
+                    <div class="glass-card history-chart-card">
+                        <div class="history-chart-header">
+                            <div>
+                                <h3>Mesačný vývoj výdavkov</h3>
+                                <p class="text-subtle">Prehľad skutočne zaplatených súm po mesiacoch</p>
+                            </div>
+                            <div class="history-controls-group">
+                                <select id="historyYearSelect" class="form-select filter-select">
+                                    <option value="2026" selected>Rok 2026</option>
+                                    <option value="2025">Rok 2025</option>
+                                    <option value="all">Všetky roky</option>
+                                </select>
+                                <button class="btn btn-secondary btn-sm" id="generateHistoryBtn" title="Dogenerovať históriu z predplatných">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i> Doplniť históriu
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 12 Months CSS Bar Chart -->
+                        <div class="history-bars-wrapper" id="historyBarsWrapper">
+                            <!-- Dynamic Bars (Jan-Dec) -->
+                        </div>
+                    </div>
+
+                    <!-- History Table Card -->
+                    <div class="glass-card history-table-card">
+                        <div class="history-table-header">
+                            <div class="search-box">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                <input type="text" id="historySearchInput" placeholder="Hľadať v histórii platieb...">
+                            </div>
+                            <div class="history-table-filters">
+                                <select id="historyCategoryFilter" class="form-select filter-select">
+                                    <option value="all">Všetky kategórie</option>
+                                    <option value="Domácnosť">Domácnosť</option>
+                                    <option value="Zábava">Zábava</option>
+                                    <option value="Práca & Nástroje">Práca & Nástroje</option>
+                                    <option value="Vzdelávanie">Vzdelávanie</option>
+                                    <option value="Zdravie & Šport">Zdravie & Šport</option>
+                                    <option value="Iné">Iné</option>
+                                </select>
+                                <button class="btn btn-primary btn-sm" id="addHistoryManualBtn">
+                                    <i class="fa-solid fa-plus"></i> Pridať platbu
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="data-table history-data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Dátum úhrady</th>
+                                        <th>Služba</th>
+                                        <th>Kategória</th>
+                                        <th>Spôsob platby</th>
+                                        <th>Suma</th>
+                                        <th style="text-align: right;">Akcia</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="historyTableBody">
+                                    <!-- Dynamic Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="empty-state hidden" id="historyEmptyState">
+                            <i class="fa-regular fa-clock"></i>
+                            <h3>Žiadne záznamy v histórii</h3>
+                            <p>Zatiaľ nemáte zaznamenané žiadne minulé platby. Kliknite na "Doplniť históriu" alebo pridajte platbu manuálne.</p>
+                        </div>
+                    </div>
+                </section>
             </main>
         </div>
     </div>
+
+    <!-- MODAL DIALOG: MANUAL HISTORY PAYMENT -->
+    <dialog class="modal-dialog glass-modal" id="addHistoryModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Pridať platbu do histórie</h3>
+                <button type="button" class="close-modal-btn" id="closeAddHistoryModalBtn">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <form id="addHistoryForm" class="app-form">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label for="histSubName">Názov služby / platby *</label>
+                        <input type="text" id="histSubName" class="form-control" required placeholder="napr. OSBD, Spotify, Netflix...">
+                    </div>
+                    <div class="form-group">
+                        <label for="histSubPrice">Zaplatená suma (€) *</label>
+                        <input type="number" id="histSubPrice" class="form-control" step="0.01" min="0" required placeholder="290.00">
+                    </div>
+                    <div class="form-group">
+                        <label for="histSubDate">Dátum úhrady *</label>
+                        <input type="date" id="histSubDate" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="histSubCategory">Kategória</label>
+                        <select id="histSubCategory" class="form-select form-control">
+                            <option value="Domácnosť">Domácnosť</option>
+                            <option value="Zábava">Zábava</option>
+                            <option value="Práca & Nástroje">Práca & Nástroje</option>
+                            <option value="Vzdelávanie">Vzdelávanie</option>
+                            <option value="Zdravie & Šport">Zdravie & Šport</option>
+                            <option value="Iné">Iné</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="histSubMethod">Spôsob platby</label>
+                        <select id="histSubMethod" class="form-select form-control">
+                            <option value="Bankový prevod">Bankový prevod</option>
+                            <option value="Platobná karta">Platobná karta</option>
+                            <option value="Apple Pay">Apple Pay</option>
+                            <option value="Google Pay">Google Pay</option>
+                            <option value="PayPal">PayPal</option>
+                            <option value="Hotovosť">Hotovosť</option>
+                            <option value="Iné">Iné</option>
+                        </select>
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="histSubNotes">Poznámka</label>
+                        <input type="text" id="histSubNotes" class="form-control" placeholder="Voliteľná poznámka...">
+                    </div>
+                </div>
+                <div class="form-actions" style="margin-top: 20px;">
+                    <button type="button" class="btn btn-secondary" id="cancelAddHistoryModalBtn">Zrušiť</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Uložiť platbu</button>
+                </div>
+            </form>
+        </div>
+    </dialog>
 
     <!-- MODAL DIALOG: EDIT SUBSCRIPTION -->
     <dialog class="modal-dialog glass-modal" id="editModal">
@@ -748,6 +919,6 @@
     </nav>
 
     <!-- Application Script -->
-    <script src="app.js?v=20260822-1"></script>
+    <script src="app.js?v=20260822-2"></script>
 </body>
 </html>

@@ -10,6 +10,7 @@
 const SUPABASE_URL = 'https://dhkxjrttoitqtecrsgzj.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoa3hqcnR0b2l0cXRlY3JzZ3pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3Mjc1MzcsImV4cCI6MjEwMjMwMzUzN30.8bSYvp7bqk_gGzQJ1cU6fjhTJoYMFEEHPlHcXvZA-G4';
 const TABLE = 'subscriptions';
+const HISTORY_TABLE = 'payment_history';
 
 let _supabaseClient = null;
 function getSupabaseClient() {
@@ -29,6 +30,7 @@ function getSupabaseClient() {
 document.addEventListener('DOMContentLoaded', async () => {
     // ——— App State ———
     let subscriptions = [];
+    let paymentHistory = [];
     let currentUser = null;
     let currentView = 'dashboard';
     let deleteTargetId = null;
@@ -39,6 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let realtimeChannel = null;
 
     const STORAGE_KEY = 'spravca_predplatnych_data';
+    const HISTORY_STORAGE_KEY = 'spravca_payment_history_data';
     const THEME_STORAGE_KEY = 'spravca_theme_preference';
 
     // ============================================================
@@ -255,6 +258,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
     }
 
+    function dbToHistory(row) {
+        if (!row) return null;
+        return {
+            id: String(row.id || ('hist_' + Date.now() + Math.random().toString(36).substr(2, 4))),
+            subscriptionId: row.subscription_id || null,
+            name: String(row.name || 'Neznáma platba'),
+            price: parseFloat(row.price) || 0,
+            category: String(row.category || 'Iné'),
+            paymentMethod: normalizePaymentMethod(row.payment_method || row.paymentMethod || 'Platobná karta'),
+            paymentDate: String(row.payment_date || row.paymentDate || new Date().toISOString().split('T')[0]),
+            notes: String(row.notes || '')
+        };
+    }
+
+    function historyToDB(hist, explicitUserId = null) {
+        const userId = explicitUserId || currentUser?.id || null;
+        return {
+            id: String(hist.id || ('hist_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9))),
+            user_id: userId,
+            subscription_id: hist.subscriptionId || hist.subscription_id || null,
+            name: String(hist.name || 'Neznáma platba').trim(),
+            price: parseFloat(hist.price) || 0,
+            category: String(hist.category || 'Iné').trim(),
+            payment_method: normalizePaymentMethod(hist.paymentMethod || hist.payment_method || 'Platobná karta'),
+            payment_date: String(hist.paymentDate || hist.payment_date || new Date().toISOString().split('T')[0]),
+            notes: String(hist.notes || '').trim()
+        };
+    }
+
     // ============================================================
     //  STORAGE STATUS BADGE & USER PROFILE UI
     // ============================================================
@@ -396,6 +428,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Dôkladné vyčistenie pamäte a lokálneho stavu
         currentUser = null;
         subscriptions = [];
+        paymentHistory = [];
         deleteTargetId = null;
         selectedCalcSubIds.clear();
         storageMode = 'unauthenticated';
@@ -403,8 +436,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Odstránenie cache odhláseného používateľa
         if (oldUserId) {
             localStorage.removeItem(STORAGE_KEY + '_' + oldUserId);
+            localStorage.removeItem(HISTORY_STORAGE_KEY + '_' + oldUserId);
         }
         localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(HISTORY_STORAGE_KEY);
 
         updateStorageStatusBadge();
         updateUserProfileUI();
@@ -564,6 +599,69 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    async function loadHistoryFromSupabase() {
+        const client = getSupabaseClient();
+        if (!client || !currentUser) return null;
+        try {
+            const { data, error } = await client
+                .from(HISTORY_TABLE)
+                .select('*')
+                .eq('user_id', currentUser.id)
+                .order('payment_date', { ascending: false });
+            if (error) throw error;
+            if (!Array.isArray(data)) return [];
+            return data.map(dbToHistory).filter(Boolean);
+        } catch (e) {
+            console.error('Supabase načítanie histórie zlyhalo:', e.message || e);
+            return null;
+        }
+    }
+
+    async function addPaymentToHistory(histRecord, syncToCloud = true) {
+        paymentHistory.unshift(histRecord);
+        paymentHistory.sort((a, b) => new Date(b.paymentDate) - new Date(a.paymentDate));
+        syncHistoryToLocalStorage();
+        if (currentView === 'history') renderHistory();
+
+        if (syncToCloud && currentUser && storageMode === 'supabase') {
+            const client = getSupabaseClient();
+            if (client) {
+                const payload = historyToDB(histRecord, currentUser.id);
+                try {
+                    await client.from(HISTORY_TABLE).insert(payload);
+                } catch (e) {
+                    console.warn('Supabase insert history error:', e);
+                }
+            }
+        }
+    }
+
+    async function deletePaymentFromHistory(histId) {
+        paymentHistory = paymentHistory.filter(h => h.id !== histId);
+        syncHistoryToLocalStorage();
+        renderHistory();
+        showToast('Záznam bol zmazaný z histórie.', 'info');
+
+        if (currentUser && storageMode === 'supabase') {
+            const client = getSupabaseClient();
+            if (client) {
+                try {
+                    await client.from(HISTORY_TABLE).delete().eq('id', histId).eq('user_id', currentUser.id);
+                } catch (e) {
+                    console.warn('Supabase delete history error:', e);
+                }
+            }
+        }
+    }
+
+    function syncHistoryToLocalStorage() {
+        if (currentUser) {
+            localStorage.setItem(HISTORY_STORAGE_KEY + '_' + currentUser.id, JSON.stringify(paymentHistory));
+        } else {
+            localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(paymentHistory));
+        }
+    }
+
     // ============================================================
     //  INICIALIZÁCIA DÁT (BEZ AUTOMATICKÝCH DEMO DÁT)
     // ============================================================
@@ -571,6 +669,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!currentUser) {
             storageMode = 'unauthenticated';
             subscriptions = [];
+            paymentHistory = [];
             updateStorageStatusBadge();
             updateUserProfileUI();
             updateAllViews();
@@ -582,10 +681,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateUserProfileUI();
 
         const cloudData = await loadFromSupabase();
+        const cloudHistory = await loadHistoryFromSupabase();
 
         if (cloudData !== null) {
             storageMode = 'supabase';
-            // Použijeme presne dáta používateľa (ak má 0 predplatných, zostáva prázdne)
             subscriptions = cloudData;
             localStorage.setItem(STORAGE_KEY + '_' + currentUser.id, JSON.stringify(subscriptions));
         } else {
@@ -598,6 +697,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 subscriptions = [];
             }
             showToast('Offline režim: Používam lokálne dáta.', 'warning');
+        }
+
+        if (cloudHistory !== null) {
+            paymentHistory = cloudHistory;
+            syncHistoryToLocalStorage();
+        } else {
+            const rawHist = localStorage.getItem(HISTORY_STORAGE_KEY + '_' + currentUser.id);
+            if (rawHist) {
+                try { paymentHistory = JSON.parse(rawHist); }
+                catch (e) { paymentHistory = []; }
+            } else {
+                paymentHistory = [];
+            }
         }
 
         updateStorageStatusBadge();
@@ -676,7 +788,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             if (realtimeChannel) client.removeChannel(realtimeChannel);
             realtimeChannel = client
-                .channel('subscriptions-user-' + currentUser.id)
+                .channel('user-channel-' + currentUser.id)
                 .on('postgres_changes', { event: '*', schema: 'public', table: TABLE, filter: `user_id=eq.${currentUser.id}` }, async () => {
                     const freshData = await loadFromSupabase();
                     if (freshData !== null) {
@@ -684,6 +796,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                         syncToLocalStorage();
                         updateAllViews();
                         showToast('Dáta synchronizované z iného zariadenia ☁️', 'info');
+                    }
+                })
+                .on('postgres_changes', { event: '*', schema: 'public', table: HISTORY_TABLE, filter: `user_id=eq.${currentUser.id}` }, async () => {
+                    const freshHist = await loadHistoryFromSupabase();
+                    if (freshHist !== null) {
+                        paymentHistory = freshHist;
+                        syncHistoryToLocalStorage();
+                        if (currentView === 'history') renderHistory();
                     }
                 })
                 .subscribe();
@@ -714,6 +834,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const titleMap = {
             'dashboard': 'Prehľad',
             'subscriptions': 'Moje predplatné',
+            'history': 'História platieb a štatistiky',
             'add-subscription': 'Pridať predplatné',
             'calculator': 'Kalkulačka úspor ("Čo ak...")',
             'notifications': 'Upozornenia a nadchádzajúce platby',
@@ -727,6 +848,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (viewName === 'notifications') renderNotifications();
         if (viewName === 'subscriptions') renderSubscriptions();
         if (viewName === 'dashboard') renderDashboard();
+        if (viewName === 'history') renderHistory();
     }
 
     mobileToggleBtn?.addEventListener('click', () => { sidebar?.classList.add('active'); sidebarOverlay?.classList.add('active'); });
@@ -759,6 +881,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             const nextDate = advanceDateToNextCycle(sub.nextPaymentDate, sub.billingCycle);
             if (nextDate !== sub.nextPaymentDate) {
                 anyAdvanced = true;
+                // Zaznamenaj uplynutú platbu do histórie
+                const alreadyRecorded = paymentHistory.some(h => h.name === sub.name && h.paymentDate === sub.nextPaymentDate);
+                if (!alreadyRecorded) {
+                    const rec = {
+                        id: 'hist_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+                        subscriptionId: sub.id,
+                        name: sub.name,
+                        price: parseFloat(sub.price) || 0,
+                        category: sub.category || 'Iné',
+                        paymentMethod: normalizePaymentMethod(sub.paymentMethod),
+                        paymentDate: sub.nextPaymentDate,
+                        notes: sub.notes || ''
+                    };
+                    addPaymentToHistory(rec, true);
+                }
                 const updated = { ...sub, nextPaymentDate: nextDate };
                 subsToUpdate.push(updated);
                 return updated;
@@ -782,6 +919,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderSubscriptions();
         renderCalculator();
         renderNotifications();
+        renderHistory();
     }
 
     // ============================================================
@@ -1317,6 +1455,302 @@ document.addEventListener('DOMContentLoaded', async () => {
             switchView('dashboard');
         }
     });
+
+    // ============================================================
+    //  8. HISTÓRIA PLATIEB A VÝVOJ VÝDAVKOV
+    // ============================================================
+    const historyYearSelect = document.getElementById('historyYearSelect');
+    const historyCategoryFilter = document.getElementById('historyCategoryFilter');
+    const historySearchInput = document.getElementById('historySearchInput');
+    const generateHistoryBtn = document.getElementById('generateHistoryBtn');
+    const addHistoryManualBtn = document.getElementById('addHistoryManualBtn');
+    const addHistoryModal = document.getElementById('addHistoryModal');
+    const addHistoryForm = document.getElementById('addHistoryForm');
+    const closeAddHistoryModalBtn = document.getElementById('closeAddHistoryModalBtn');
+    const cancelAddHistoryModalBtn = document.getElementById('cancelAddHistoryModalBtn');
+
+    historyYearSelect?.addEventListener('change', renderHistory);
+    historyCategoryFilter?.addEventListener('change', renderHistory);
+    historySearchInput?.addEventListener('input', renderHistory);
+
+    function openAddHistoryModal() {
+        if (addHistoryForm) {
+            addHistoryForm.reset();
+            const dateInput = document.getElementById('histSubDate');
+            if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+        }
+        if (addHistoryModal && typeof addHistoryModal.showModal === 'function') {
+            addHistoryModal.showModal();
+        }
+    }
+
+    function closeAddHistoryModal() {
+        if (addHistoryModal && addHistoryModal.open) {
+            addHistoryModal.close();
+        }
+    }
+
+    addHistoryManualBtn?.addEventListener('click', openAddHistoryModal);
+    closeAddHistoryModalBtn?.addEventListener('click', closeAddHistoryModal);
+    cancelAddHistoryModalBtn?.addEventListener('click', closeAddHistoryModal);
+
+    addHistoryForm?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = document.getElementById('histSubName')?.value.trim();
+        const price = parseFloat(document.getElementById('histSubPrice')?.value) || 0;
+        const date = document.getElementById('histSubDate')?.value;
+        const category = document.getElementById('histSubCategory')?.value || 'Iné';
+        const method = document.getElementById('histSubMethod')?.value || 'Platobná karta';
+        const notes = document.getElementById('histSubNotes')?.value.trim() || '';
+
+        if (!name || isNaN(price) || !date) {
+            showToast('Vyplňte prosím všetky povinné polia.', 'error');
+            return;
+        }
+
+        const newHist = {
+            id: 'hist_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+            subscriptionId: null,
+            name: name,
+            price: price,
+            category: category,
+            paymentMethod: method,
+            paymentDate: date,
+            notes: notes
+        };
+
+        addPaymentToHistory(newHist, true);
+        closeAddHistoryModal();
+        showToast('Platba bola úspešne pridaná do histórie! ✅', 'success');
+    });
+
+    generateHistoryBtn?.addEventListener('click', () => {
+        if (!subscriptions.length) {
+            showToast('Nemáte žiadne predplatné na dogenerovanie histórie.', 'warning');
+            return;
+        }
+        let addedCount = 0;
+        const currentMonth = new Date().getMonth() + 1; // 1-12
+        const currentYear = new Date().getFullYear();
+
+        subscriptions.forEach(sub => {
+            const parts = sub.nextPaymentDate.split('-').map(Number);
+            const origDay = parts[2] || 1;
+            const price = parseFloat(sub.price) || 0;
+
+            if (sub.billingCycle === 'yearly') {
+                const dates = [`2025-${String(parts[1]||1).padStart(2,'0')}-${String(origDay).padStart(2,'0')}`, `2026-${String(parts[1]||1).padStart(2,'0')}-${String(origDay).padStart(2,'0')}`];
+                dates.forEach(d => {
+                    if (!paymentHistory.some(h => h.name === sub.name && h.paymentDate === d)) {
+                        const rec = {
+                            id: 'hist_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+                            subscriptionId: sub.id,
+                            name: sub.name,
+                            price: price,
+                            category: sub.category || 'Iné',
+                            paymentMethod: normalizePaymentMethod(sub.paymentMethod),
+                            paymentDate: d,
+                            notes: 'Automaticky dogenerované'
+                        };
+                        addPaymentToHistory(rec, true);
+                        addedCount++;
+                    }
+                });
+            } else {
+                // Mesačné v 2026 (od Jan po aktuálny mesiac)
+                for (let m = 1; m <= currentMonth; m++) {
+                    const daysInM = new Date(currentYear, m, 0).getDate();
+                    const dStr = `${currentYear}-${String(m).padStart(2,'0')}-${String(Math.min(origDay, daysInM)).padStart(2,'0')}`;
+                    if (!paymentHistory.some(h => h.name === sub.name && h.paymentDate === dStr)) {
+                        const rec = {
+                            id: 'hist_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+                            subscriptionId: sub.id,
+                            name: sub.name,
+                            price: price,
+                            category: sub.category || 'Iné',
+                            paymentMethod: normalizePaymentMethod(sub.paymentMethod),
+                            paymentDate: dStr,
+                            notes: 'Automaticky dogenerované'
+                        };
+                        addPaymentToHistory(rec, true);
+                        addedCount++;
+                    }
+                }
+                // Mesačné v 2025 (pre porovnanie)
+                for (let m = 9; m <= 12; m++) {
+                    const daysInM = new Date(2025, m, 0).getDate();
+                    const dStr = `2025-${String(m).padStart(2,'0')}-${String(Math.min(origDay, daysInM)).padStart(2,'0')}`;
+                    if (!paymentHistory.some(h => h.name === sub.name && h.paymentDate === dStr)) {
+                        const rec = {
+                            id: 'hist_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+                            subscriptionId: sub.id,
+                            name: sub.name,
+                            price: price,
+                            category: sub.category || 'Iné',
+                            paymentMethod: normalizePaymentMethod(sub.paymentMethod),
+                            paymentDate: dStr,
+                            notes: 'Automaticky dogenerované'
+                        };
+                        addPaymentToHistory(rec, true);
+                        addedCount++;
+                    }
+                }
+            }
+        });
+
+        renderHistory();
+        showToast(`História bola úspešne doplnená o ${addedCount} platieb! 🎉`, 'success');
+    });
+
+    document.getElementById('historyTableBody')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.delete-history-btn');
+        if (!btn) return;
+        const id = btn.dataset.id;
+        if (confirm('Naozaj chcete zmazať túto platbu z histórie?')) {
+            deletePaymentFromHistory(id);
+        }
+    });
+
+    function renderHistory() {
+        const selectedYear = historyYearSelect?.value || '2026';
+        const selectedCategory = historyCategoryFilter?.value || 'all';
+        const query = (historySearchInput?.value || '').trim().toLowerCase();
+
+        // 1. Filtrovanie
+        const filtered = paymentHistory.filter(h => {
+            const matchesYear = selectedYear === 'all' || (h.paymentDate && h.paymentDate.startsWith(selectedYear));
+            const matchesCat = selectedCategory === 'all' || h.category === selectedCategory;
+            const matchesSearch = !query || h.name.toLowerCase().includes(query) || h.category.toLowerCase().includes(query) || (h.notes && h.notes.toLowerCase().includes(query));
+            return matchesYear && matchesCat && matchesSearch;
+        });
+
+        // 2. Výpočet súm
+        const targetYear = selectedYear === 'all' ? new Date().getFullYear().toString() : selectedYear;
+        const yearRecords = paymentHistory.filter(h => h.paymentDate && h.paymentDate.startsWith(targetYear));
+        const totalYearSpent = yearRecords.reduce((acc, h) => acc + (parseFloat(h.price) || 0), 0);
+
+        const prevYear = String(parseInt(targetYear) - 1);
+        const prevYearRecords = paymentHistory.filter(h => h.paymentDate && h.paymentDate.startsWith(prevYear));
+        const totalPrevYearSpent = prevYearRecords.reduce((acc, h) => acc + (parseFloat(h.price) || 0), 0);
+
+        const activeMonthsSet = new Set(yearRecords.map(h => h.paymentDate.substring(0, 7)));
+        const activeMonthsCount = Math.max(activeMonthsSet.size, 1);
+        const monthlyAvg = totalYearSpent / activeMonthsCount;
+
+        const diffSpent = totalYearSpent - totalPrevYearSpent;
+        const diffPercent = totalPrevYearSpent > 0 ? ((diffSpent / totalPrevYearSpent) * 100).toFixed(1) : null;
+
+        // UI Stats
+        const yearTotalEl = document.getElementById('historyYearTotal');
+        const yearTotalLabel = document.getElementById('historyYearTotalLabel');
+        const paymentsCountEl = document.getElementById('historyPaymentsCount');
+        const trendValueEl = document.getElementById('historyTrendValue');
+        const trendSubtextEl = document.getElementById('historyTrendSubtext');
+        const monthlyAvgEl = document.getElementById('historyMonthlyAvg');
+        const activeMonthsEl = document.getElementById('historyActiveMonths');
+
+        if (yearTotalLabel) yearTotalLabel.textContent = selectedYear === 'all' ? 'Celkovo za všetky roky' : `Zaplatené v roku ${targetYear}`;
+        if (yearTotalEl) yearTotalEl.textContent = formatMoney(totalYearSpent);
+        if (paymentsCountEl) paymentsCountEl.textContent = `${yearRecords.length} zrealizovaných platieb`;
+
+        if (trendValueEl) {
+            if (totalPrevYearSpent === 0 && totalYearSpent > 0) {
+                trendValueEl.textContent = `+${formatMoney(totalYearSpent)}`;
+                trendValueEl.style.color = 'var(--text-main)';
+            } else if (diffSpent > 0) {
+                trendValueEl.textContent = `+${formatMoney(diffSpent)} (+${diffPercent}%)`;
+                trendValueEl.style.color = '#ef4444';
+            } else if (diffSpent < 0) {
+                trendValueEl.textContent = `${formatMoney(diffSpent)} (${diffPercent}%)`;
+                trendValueEl.style.color = '#10b981';
+            } else {
+                trendValueEl.textContent = `0,00 € (0%)`;
+                trendValueEl.style.color = 'var(--text-main)';
+            }
+        }
+        if (trendSubtextEl) {
+            trendSubtextEl.textContent = totalPrevYearSpent > 0 ? `Porovnanie s rokom ${prevYear} (${formatMoney(totalPrevYearSpent)})` : `V roku ${prevYear} neboli zaznamenané platby`;
+        }
+
+        if (monthlyAvgEl) monthlyAvgEl.textContent = formatMoney(monthlyAvg);
+        if (activeMonthsEl) activeMonthsEl.textContent = `v ${activeMonthsCount} sledovaných ${activeMonthsCount === 1 ? 'miesiaci' : activeMonthsCount < 5 ? 'mesiacoch' : 'mesiacoch'}`;
+
+        // 3. Render 12-mesačného grafu
+        const chartWrapper = document.getElementById('historyBarsWrapper');
+        if (chartWrapper) {
+            chartWrapper.innerHTML = '';
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Máj', 'Jún', 'Júl', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec'];
+            const monthlyTotals = Array(12).fill(0);
+
+            yearRecords.forEach(h => {
+                const m = parseInt(h.paymentDate.split('-')[1]) - 1;
+                if (m >= 0 && m < 12) {
+                    monthlyTotals[m] += parseFloat(h.price) || 0;
+                }
+            });
+
+            const maxMonthVal = Math.max(...monthlyTotals, 100);
+            const currentActualMonth = new Date().getMonth();
+            const currentActualYear = new Date().getFullYear().toString();
+
+            monthNames.forEach((name, idx) => {
+                const val = monthlyTotals[idx];
+                const heightPct = val > 0 ? Math.max(Math.round((val / maxMonthVal) * 100), 8) : 4;
+                const isCurrent = targetYear === currentActualYear && idx === currentActualMonth;
+
+                const col = document.createElement('div');
+                col.className = `chart-month-col ${isCurrent ? 'is-current' : ''}`;
+                col.innerHTML = `
+                    <div class="chart-month-value" title="${formatMoney(val)}">${val > 0 ? Math.round(val) + ' €' : ''}</div>
+                    <div class="chart-bar-container">
+                        <div class="chart-bar-fill" style="height: ${heightPct}%;"></div>
+                    </div>
+                    <div class="chart-month-name">${name}</div>
+                `;
+                chartWrapper.appendChild(col);
+            });
+        }
+
+        // 4. Render tabuľky
+        const tbody = document.getElementById('historyTableBody');
+        const emptyState = document.getElementById('historyEmptyState');
+
+        if (tbody) {
+            tbody.innerHTML = '';
+            if (filtered.length === 0) {
+                emptyState?.classList.remove('hidden');
+            } else {
+                emptyState?.classList.add('hidden');
+                filtered.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'history-table-row';
+                    tr.innerHTML = `
+                        <td><strong>${formatDateSK(item.paymentDate)}</strong></td>
+                        <td>
+                            <div class="sub-item-cell">
+                                <div class="sub-item-icon" style="background-color: var(--primary);">
+                                    <i class="fa-solid ${getCategoryIcon(item.category)}"></i>
+                                </div>
+                                <div class="sub-item-title-group">
+                                    <span class="sub-item-name">${escapeHtml(item.name)}</span>
+                                    ${item.notes ? `<small class="text-subtle text-truncate" style="max-width:180px;" title="${escapeHtml(item.notes)}">${escapeHtml(item.notes)}</small>` : ''}
+                                </div>
+                            </div>
+                        </td>
+                        <td><span class="sub-badge-category"><i class="fa-solid ${getCategoryIcon(item.category)}"></i> ${escapeHtml(item.category)}</span></td>
+                        <td><span class="text-subtle">${escapeHtml(normalizePaymentMethod(item.paymentMethod))}</span></td>
+                        <td><strong style="color: var(--text-main); font-size: 15px;">${formatMoney(item.price)}</strong></td>
+                        <td style="text-align: right;">
+                            <button class="btn btn-danger-outline btn-xs delete-history-btn" data-id="${item.id}" title="Zmazať záznam">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+    }
 
     // ============================================================
     //  KATEGÓRIA HELPERS

@@ -72,3 +72,36 @@ CREATE POLICY "Users can manage their own subscriptions"
     TO authenticated
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
+
+-- ============================================================
+--  História zrealizovaných platieb (Payment History)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS payment_history (
+    id TEXT PRIMARY KEY,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    subscription_id TEXT,
+    name TEXT NOT NULL,
+    price NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    category TEXT NOT NULL DEFAULT 'Iné',
+    payment_method TEXT DEFAULT 'Platobná karta',
+    payment_date DATE NOT NULL,
+    notes TEXT DEFAULT '',
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Indexy pre históriu
+CREATE INDEX IF NOT EXISTS idx_payment_history_user_id ON payment_history (user_id);
+CREATE INDEX IF NOT EXISTS idx_payment_history_date ON payment_history (payment_date DESC);
+CREATE INDEX IF NOT EXISTS idx_payment_history_category ON payment_history (category);
+
+-- RLS pre históriu
+ALTER TABLE payment_history ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can manage their own payment history" ON payment_history;
+CREATE POLICY "Users can manage their own payment history"
+    ON payment_history
+    FOR ALL
+    TO authenticated
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
