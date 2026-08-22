@@ -28,7 +28,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=20260822-2">
+    <link rel="stylesheet" href="style.css?v=20260822-3">
 
     <!-- Immediate Theme Initialization (Prevents FOUC) -->
     <script>
@@ -585,31 +585,37 @@
                 <!-- VIEW 7: HISTÓRIA PLATIEB A VÝVOJ VÝDAVKOV -->
                 <section class="view-section" id="view-history">
                     <!-- Top Summary Stats -->
-                    <div class="stats-grid history-stats-grid">
-                        <div class="stat-card glass-card">
-                            <div class="stat-icon icon-primary"><i class="fa-solid fa-receipt"></i></div>
-                            <div class="stat-content">
-                                <span class="stat-label" id="historyYearTotalLabel">Zaplatené v roku 2026</span>
-                                <h3 class="stat-value" id="historyYearTotal">0,00 €</h3>
-                                <span class="stat-subtext text-subtle" id="historyPaymentsCount">0 zrealizovaných platieb</span>
+                    <div class="metrics-grid history-metrics-grid">
+                        <div class="metric-card glass-card">
+                            <div class="metric-icon primary">
+                                <i class="fa-solid fa-receipt"></i>
+                            </div>
+                            <div class="metric-info">
+                                <span class="metric-label" id="historyYearTotalLabel">Zaplatené v roku 2026</span>
+                                <h3 class="metric-value" id="historyYearTotal">0,00 €</h3>
+                                <span class="metric-subtext" id="historyPaymentsCount">0 zrealizovaných platieb</span>
                             </div>
                         </div>
 
-                        <div class="stat-card glass-card">
-                            <div class="stat-icon icon-accent"><i class="fa-solid fa-arrow-trend-up"></i></div>
-                            <div class="stat-content">
-                                <span class="stat-label">Medziročný trend</span>
-                                <h3 class="stat-value" id="historyTrendValue">0,00 €</h3>
-                                <span class="stat-subtext" id="historyTrendSubtext">Porovnanie s rokom 2025</span>
+                        <div class="metric-card glass-card">
+                            <div class="metric-icon accent">
+                                <i class="fa-solid fa-arrow-trend-up"></i>
+                            </div>
+                            <div class="metric-info">
+                                <span class="metric-label">Medziročný trend</span>
+                                <h3 class="metric-value" id="historyTrendValue">0,00 €</h3>
+                                <span class="metric-subtext" id="historyTrendSubtext">Porovnanie s rokom 2025</span>
                             </div>
                         </div>
 
-                        <div class="stat-card glass-card">
-                            <div class="stat-icon icon-emerald"><i class="fa-solid fa-calendar-check"></i></div>
-                            <div class="stat-content">
-                                <span class="stat-label">Mesačný priemer</span>
-                                <h3 class="stat-value" id="historyMonthlyAvg">0,00 €</h3>
-                                <span class="stat-subtext text-subtle" id="historyActiveMonths">v aktívnych mesiacoch</span>
+                        <div class="metric-card glass-card">
+                            <div class="metric-icon success">
+                                <i class="fa-solid fa-calendar-check"></i>
+                            </div>
+                            <div class="metric-info">
+                                <span class="metric-label">Mesačný priemer</span>
+                                <h3 class="metric-value" id="historyMonthlyAvg">0,00 €</h3>
+                                <span class="metric-subtext" id="historyActiveMonths">v aktívnych mesiacoch</span>
                             </div>
                         </div>
                     </div>
@@ -919,6 +925,6 @@
     </nav>
 
     <!-- Application Script -->
-    <script src="app.js?v=20260822-2"></script>
+    <script src="app.js?v=20260822-3"></script>
 </body>
 </html>

@@ -2021,7 +2021,10 @@ body::after {
 /* ==========================================================================
    VIEW: HISTÓRIA PLATIEB & ŠTATISTIKY
    ========================================================================== */
-.history-stats-grid {
+.history-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
     margin-bottom: 24px;
 }
 
